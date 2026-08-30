@@ -41,7 +41,10 @@ import {
   LogOut,
   ShieldCheck,
   User,
-  KeyRound
+  KeyRound,
+  Menu,
+  ArrowLeft,
+  MoreVertical
 } from 'lucide-react'
 import {
   BarChart,
@@ -103,6 +106,8 @@ export default function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState('cuentacorriente') // 'dashboard' | 'libro' | 'cuentacorriente' | 'medicos' | 'maestros'
   const [selectedMes, setSelectedMes] = useState('ENERO 26')
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+  const [isMobileCCDetailOpen, setIsMobileCCDetailOpen] = useState(false)
 
   // Data state
   const [movimientos, setMovimientos] = useState(initialData.movimientos || initialData.movimientosEnero || [])
@@ -891,19 +896,40 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans relative">
+      {/* MOBILE OVERLAY */}
+      {isMobileSidebarOpen && (
+        <div
+          onClick={() => setIsMobileSidebarOpen(false)}
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 md:hidden animate-in fade-in"
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0">
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transform transition-transform duration-200 ease-in-out md:static md:translate-x-0 ${
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div>
           {/* Logo / Header */}
-          <div className="p-5 border-b border-slate-800 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Scale className="w-5 h-5 text-white" />
+          <div className="p-4 md:p-5 border-b border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <Scale className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="font-bold text-base tracking-tight text-white">Sistema Gestión</h1>
+                <p className="text-xs text-slate-400">Contabilidad & Finanzas</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-base tracking-tight text-white">Sistema Gestión</h1>
-              <p className="text-xs text-slate-400">Contabilidad & Finanzas</p>
-            </div>
+            {/* Close button for mobile */}
+            <button
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
           {/* Period & Year Selector */}
@@ -915,7 +941,10 @@ export default function App() {
               </label>
               <button
                 type="button"
-                onClick={() => setIsNewPeriodModalOpen(true)}
+                onClick={() => {
+                  setIsNewPeriodModalOpen(true)
+                  setIsMobileSidebarOpen(false)
+                }}
                 className="flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition cursor-pointer"
                 title="Crear un nuevo período"
               >
@@ -932,7 +961,7 @@ export default function App() {
                   onChange={(e) => setSelectedYear(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500 font-bold cursor-pointer"
                 >
-                  <option value="TODOS">Todos los años</option>
+                  <option value="TODOS">Todos</option>
                   {availableYears.map((y) => (
                     <option key={y} value={y}>
                       Año {y}
@@ -965,7 +994,11 @@ export default function App() {
           {/* Navigation Links */}
           <nav className="px-3 space-y-1 mt-2">
             <button
-              onClick={() => setActiveTab('cuentacorriente')}
+              onClick={() => {
+                setActiveTab('cuentacorriente')
+                setIsMobileSidebarOpen(false)
+                setIsMobileCCDetailOpen(false)
+              }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'cuentacorriente'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
@@ -980,7 +1013,10 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('libro')}
+              onClick={() => {
+                setActiveTab('libro')
+                setIsMobileSidebarOpen(false)
+              }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'libro'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
@@ -992,7 +1028,10 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => {
+                setActiveTab('dashboard')
+                setIsMobileSidebarOpen(false)
+              }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'dashboard'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
@@ -1004,7 +1043,10 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('medicos')}
+              onClick={() => {
+                setActiveTab('medicos')
+                setIsMobileSidebarOpen(false)
+              }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'medicos'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
@@ -1016,7 +1058,10 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('maestros')}
+              onClick={() => {
+                setActiveTab('maestros')
+                setIsMobileSidebarOpen(false)
+              }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === 'maestros'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
@@ -1059,32 +1104,45 @@ export default function App() {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
         {/* TOP NAVBAR */}
-        <header className="h-16 border-b border-slate-800 px-6 flex items-center justify-between bg-slate-900/50 backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-white">
-              {activeTab === 'cuentacorriente' && 'Módulo de Cuenta Corriente (Débito, Crédito y Saldo)'}
-              {activeTab === 'libro' && 'Libro Diario / Movimientos de Caja'}
-              {activeTab === 'dashboard' && 'Dashboard de Gestión y Finanzas'}
-              {activeTab === 'medicos' && 'Liquidación de Honorarios y Retenciones'}
-              {activeTab === 'maestros' && 'Catálogos y Tablas Maestras'}
-            </h2>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+        <header className="min-h-16 py-2.5 md:py-0 border-b border-slate-800 px-3 md:px-6 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/80 backdrop-blur-md shrink-0 z-30">
+          <div className="flex items-center gap-2.5 md:gap-4 min-w-0">
+            {/* Mobile Sidebar Hamburger Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="md:hidden p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 focus:outline-none"
+              title="Abrir menú"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <div className="min-w-0">
+              <h2 className="text-sm md:text-base lg:text-lg font-semibold text-white truncate">
+                {activeTab === 'cuentacorriente' && 'Cuentas Corrientes'}
+                {activeTab === 'libro' && 'Libro Diario / Caja'}
+                {activeTab === 'dashboard' && 'Dashboard y Balances'}
+                {activeTab === 'medicos' && 'Honorarios Médicos'}
+                {activeTab === 'maestros' && 'Tablas Maestras'}
+              </h2>
+            </div>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
               {selectedMes}
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
             <button
               onClick={() => {
                 setModalType('EGRESO')
                 setIsModalOpen(true)
               }}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              title="Cargar Gasto / Pago"
             >
-              <ArrowDownRight className="w-4 h-4 text-rose-400" />
-              Cargar Gasto / Pago
+              <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Cargar</span> Gasto
             </button>
 
             <button
@@ -1092,10 +1150,11 @@ export default function App() {
                 setModalType('MEDICO')
                 setIsModalOpen(true)
               }}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              title="Cargar Honorario Médico"
             >
-              <UserCheck className="w-4 h-4 text-indigo-400" />
-              Cargar Honorario Médico
+              <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Honorario</span> Médico
             </button>
 
             <button
@@ -1103,23 +1162,28 @@ export default function App() {
                 setModalType('INGRESO')
                 setIsModalOpen(true)
               }}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition"
+              title="Nuevo Ingreso"
             >
-              <ArrowUpRight className="w-4 h-4" />
-              Nuevo Ingreso
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Nuevo</span> Ingreso
             </button>
           </div>
         </header>
 
         {/* VIEW CONTAINER */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4 md:space-y-6">
           {/* TAB: CUENTA CORRIENTE PROFESIONAL */}
           {activeTab === 'cuentacorriente' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-140px)]">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 min-h-[calc(100vh-140px)]">
               {/* LEFT COLUMN: ENTITIES SELECTOR */}
-              <div className="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl">
+              <div
+                className={`lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl ${
+                  isMobileCCDetailOpen ? 'hidden lg:flex' : 'flex'
+                }`}
+              >
                 {/* Entity Search & Type Filter */}
-                <div className="p-4 border-b border-slate-800 space-y-3 bg-slate-950/40">
+                <div className="p-3.5 sm:p-4 border-b border-slate-800 space-y-3 bg-slate-950/40">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                       <Users className="w-4 h-4 text-blue-400" />
@@ -1180,15 +1244,17 @@ export default function App() {
                 </div>
 
                 {/* Entity List */}
-                <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 p-2 space-y-1">
+                <div className="flex-1 max-h-[60vh] lg:max-h-none overflow-y-auto divide-y divide-slate-800/60 p-2 space-y-1">
                   {filteredEntidades.map((ent) => {
                     const isSelected = selectedEntity === ent.nombre
-                    const hasMovs = ent.movimientosCount > 0
 
                     return (
                       <div
                         key={ent.nombre}
-                        onClick={() => setSelectedEntity(ent.nombre)}
+                        onClick={() => {
+                          setSelectedEntity(ent.nombre)
+                          setIsMobileCCDetailOpen(true)
+                        }}
                         className={`p-3 rounded-xl cursor-pointer transition flex items-center justify-between ${
                           isSelected
                             ? 'bg-blue-600/15 border border-blue-500/40 text-white'
@@ -1238,57 +1304,71 @@ export default function App() {
               </div>
 
               {/* RIGHT COLUMN: EXTRACTO BANCARIO / LIBRO MAYOR (DEBITO, CREDITO, SALDO) */}
-              <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl">
+              <div
+                className={`lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl ${
+                  !isMobileCCDetailOpen ? 'hidden lg:flex' : 'flex'
+                }`}
+              >
                 {/* Header Summary for Selected Entity */}
                 {selectedEntityObj ? (
                   <>
-                    <div className="p-5 border-b border-slate-800 bg-slate-950/60 flex flex-wrap items-center justify-between gap-4">
+                    <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-lg">
+                        {/* Mobile Back Button */}
+                        <button
+                          type="button"
+                          onClick={() => setIsMobileCCDetailOpen(false)}
+                          className="lg:hidden p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white border border-slate-700"
+                          title="Volver a la lista"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                        </button>
+
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-base sm:text-lg shrink-0">
                           {selectedEntityObj.nombre.charAt(0)}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <h3 className="text-base font-bold text-white">{selectedEntityObj.nombre}</h3>
-                            <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-medium">
+                            <h3 className="text-sm sm:text-base font-bold text-white truncate">{selectedEntityObj.nombre}</h3>
+                            <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-medium shrink-0">
                               {selectedEntityObj.tipo}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-400">
+                          <p className="text-[11px] sm:text-xs text-slate-400 truncate">
                             Extracto cronológico de cuenta corriente y comprobantes
                           </p>
                         </div>
                       </div>
 
                       {/* Resumen Cards (Débito, Crédito, Saldo) */}
-                      <div className="flex items-center gap-3 font-mono">
+                      <div className="grid grid-cols-3 sm:flex items-center gap-2 sm:gap-3 font-mono">
                         {/* Total Débito */}
-                        <div className="bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-right">
-                          <span className="text-[10px] text-slate-400 uppercase font-sans font-bold block">
-                            Total Débito (Cargos)
+                        <div className="bg-slate-900 border border-slate-800 p-2 sm:px-3 sm:py-2 rounded-xl text-center sm:text-right">
+                          <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-sans font-bold block truncate">
+                            Débito
                           </span>
-                          <span className="text-sm font-bold text-rose-400">
+                          <span className="text-xs sm:text-sm font-bold text-rose-400">
                             {fmtMoney(extractoCuenta.totalDebito)}
                           </span>
                         </div>
 
                         {/* Total Crédito */}
-                        <div className="bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-right">
-                          <span className="text-[10px] text-slate-400 uppercase font-sans font-bold block">
-                            Total Crédito (Pagos)
+                        <div className="bg-slate-900 border border-slate-800 p-2 sm:px-3 sm:py-2 rounded-xl text-center sm:text-right">
+                          <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-sans font-bold block truncate">
+                            Crédito
                           </span>
-                          <span className="text-sm font-bold text-emerald-400">
+                          <span className="text-xs sm:text-sm font-bold text-emerald-400">
                             {fmtMoney(extractoCuenta.totalCredito)}
                           </span>
                         </div>
 
                         {/* Saldo Actual */}
-                        <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-right ring-1 ring-blue-500/30">
-                          <span className="text-[10px] text-slate-400 uppercase font-sans font-bold block">
-                            Saldo de Cuenta
+                        <div className="bg-slate-900 border border-slate-800 p-2 sm:px-4 sm:py-2 rounded-xl text-center sm:text-right ring-1 ring-blue-500/30">
+                          <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-sans font-bold block truncate">
+                            Saldo
                           </span>
                           <span
-                            className={`text-base font-extrabold ${
+                            className={`text-xs sm:text-base font-extrabold ${
                               extractoCuenta.saldoFinal === 0
                                 ? 'text-emerald-400'
                                 : 'text-amber-400'
@@ -1301,32 +1381,32 @@ export default function App() {
                     </div>
 
                     {/* Filter Toolbar specifically for the Ledger: Filter by Year, Month and Quick Excel Export */}
-                    <div className="px-5 py-3 border-b border-slate-800 bg-slate-950/40 flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-3">
-                        <span className="font-semibold text-slate-400 flex items-center gap-1.5">
+                    <div className="px-3.5 sm:px-5 py-3 border-b border-slate-800 bg-slate-950/40 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <span className="font-semibold text-slate-400 flex items-center gap-1.5 text-xs">
                           <Filter className="w-3.5 h-3.5 text-blue-400" />
-                          Filtrar extracto:
+                          Filtros:
                         </span>
 
                         {/* Year Filter */}
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span className="text-slate-500 text-[11px]">Año:</span>
                           <select
                             value={ccYearFilter}
                             onChange={(e) => setCcYearFilter(e.target.value)}
-                            className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                            className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                           >
-                            <option value="TODOS">Todos los años</option>
+                            <option value="TODOS">Todos</option>
                             {availableYears.map((y) => (
                               <option key={y} value={y}>
-                                Año {y}
+                                {y}
                               </option>
                             ))}
                           </select>
                         </div>
 
                         {/* Month / Period Filter */}
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <span className="text-slate-500 text-[11px]">Período:</span>
                           <select
                             value={ccPeriodFilter}
@@ -1335,9 +1415,9 @@ export default function App() {
                               setCcStartDate('')
                               setCcEndDate('')
                             }}
-                            className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                            className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                           >
-                            <option value="TODOS">Histórico completo</option>
+                            <option value="TODOS">Histórico</option>
                             {meses.map((m) => (
                               <option key={m} value={m}>
                                 {m}
@@ -1347,7 +1427,7 @@ export default function App() {
                         </div>
 
                         {/* Rango de Fechas Exacto (Desde / Hasta) */}
-                        <div className="flex items-center gap-1.5 pl-2 border-l border-slate-800">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-slate-500 text-[11px]">Desde:</span>
                           <input
                             type="date"
@@ -1358,9 +1438,6 @@ export default function App() {
                             }}
                             className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-0.5 text-slate-200 text-xs focus:outline-none focus:border-blue-500 font-mono"
                           />
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
                           <span className="text-slate-500 text-[11px]">Hasta:</span>
                           <input
                             type="date"
@@ -1374,41 +1451,36 @@ export default function App() {
                         </div>
 
                         {(ccYearFilter !== 'TODOS' || ccPeriodFilter !== 'TODOS' || ccStartDate || ccEndDate) && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold border border-blue-500/30">
-                              ✓ Filtro Activo: {ccPeriodFilter !== 'TODOS' ? ccPeriodFilter : ccStartDate || ccEndDate ? `${ccStartDate} a ${ccEndDate}` : `Año ${ccYearFilter}`}
-                            </span>
-                            <button
-                              onClick={() => {
-                                setCcYearFilter('TODOS')
-                                setCcPeriodFilter('TODOS')
-                                setCcStartDate('')
-                                setCcEndDate('')
-                              }}
-                              className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold underline cursor-pointer"
-                            >
-                              ✕ Quitar Filtros
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => {
+                              setCcYearFilter('TODOS')
+                              setCcPeriodFilter('TODOS')
+                              setCcStartDate('')
+                              setCcEndDate('')
+                            }}
+                            className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold underline cursor-pointer"
+                          >
+                            ✕ Limpiar
+                          </button>
                         )}
                       </div>
 
                       {/* Export Buttons */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 ml-auto sm:ml-0">
                         <button
                           type="button"
                           onClick={handleExportCCExcel}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-semibold transition cursor-pointer active:scale-95 shadow-sm"
+                          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-semibold text-xs transition cursor-pointer active:scale-95 shadow-sm"
                           title="Descargar extracto detallado en Excel / CSV"
                         >
                           <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Descargar Excel</span>
+                          <span>Excel</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => window.print()}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium transition cursor-pointer"
+                          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium text-xs transition cursor-pointer"
                           title="Imprimir o guardar como PDF"
                         >
                           <Printer className="w-3.5 h-3.5" />
@@ -1422,8 +1494,8 @@ export default function App() {
                 )}
 
                 {/* Table of Ledger Entries */}
-                <div className="flex-1 overflow-y-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[65vh] lg:max-h-none">
+                  <table className="w-full text-left text-xs border-collapse min-w-[650px]">
                     <thead className="bg-slate-950/80 sticky top-0 z-10 backdrop-blur border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
                       <tr>
                         <th className="py-3 px-4">Fecha</th>
@@ -1502,10 +1574,10 @@ export default function App() {
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-4 border-t border-slate-800 bg-slate-950 flex justify-between items-center text-xs">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Lógica de partida doble contable aplicada</span>
+                <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950 flex flex-wrap justify-between items-center gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-slate-400 text-[11px] sm:text-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Partida doble contable aplicada</span>
                   </div>
 
                   <div className="flex items-center gap-3">
@@ -1514,7 +1586,7 @@ export default function App() {
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
                     >
                       <Printer className="w-3.5 h-3.5 text-slate-400" />
-                      Imprimir Extracto
+                      Imprimir
                     </button>
                   </div>
                 </div>
@@ -1526,95 +1598,95 @@ export default function App() {
           {activeTab === 'libro' && (
             <div className="space-y-4">
               {/* STATS STRIP */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                 {/* Total Ingresos */}
-                <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
+                <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Ingresos Totales</p>
-                      <h3 className="text-xl font-bold text-emerald-400 mt-1">{fmtMoney(stats.totalIngresos)}</h3>
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs font-medium text-slate-400 uppercase tracking-wider truncate">Ingresos</p>
+                      <h3 className="text-base sm:text-xl font-bold text-emerald-400 mt-0.5 sm:mt-1 truncate">{fmtMoney(stats.totalIngresos)}</h3>
                     </div>
-                    <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20">
-                      <TrendingUp className="w-5 h-5" />
+                    <div className="p-1.5 sm:p-2 bg-emerald-500/10 rounded-lg text-emerald-400 border border-emerald-500/20 shrink-0">
+                      <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-2">Policlínica, Salón, Cantina y Natatorio</p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 truncate">Policlínica y Otros</p>
                 </div>
 
                 {/* Total Egresos */}
-                <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
+                <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Egresos Totales</p>
-                      <h3 className="text-xl font-bold text-rose-400 mt-1">{fmtMoney(stats.totalEgresosTotal)}</h3>
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs font-medium text-slate-400 uppercase tracking-wider truncate">Egresos</p>
+                      <h3 className="text-base sm:text-xl font-bold text-rose-400 mt-0.5 sm:mt-1 truncate">{fmtMoney(stats.totalEgresosTotal)}</h3>
                     </div>
-                    <div className="p-2 bg-rose-500/10 rounded-lg text-rose-400 border border-rose-500/20">
-                      <TrendingDown className="w-5 h-5" />
+                    <div className="p-1.5 sm:p-2 bg-rose-500/10 rounded-lg text-rose-400 border border-rose-500/20 shrink-0">
+                      <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-2">Proveedores, Sueldos e Impuestos</p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 truncate">Proveed. y Sueldos</p>
                 </div>
 
                 {/* Total Honorarios Médicos */}
-                <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
+                <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Honorarios Médicos (Neto)</p>
-                      <h3 className="text-xl font-bold text-indigo-400 mt-1">{fmtMoney(stats.totalNetoMed)}</h3>
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs font-medium text-slate-400 uppercase tracking-wider truncate">Honorarios</p>
+                      <h3 className="text-base sm:text-xl font-bold text-indigo-400 mt-0.5 sm:mt-1 truncate">{fmtMoney(stats.totalNetoMed)}</h3>
                     </div>
-                    <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400 border border-indigo-500/20">
-                      <UserCheck className="w-5 h-5" />
+                    <div className="p-1.5 sm:p-2 bg-indigo-500/10 rounded-lg text-indigo-400 border border-indigo-500/20 shrink-0">
+                      <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-2">Retenciones: {fmtMoney(stats.totalRetencionesMed)}</p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 truncate">Ret: {fmtMoney(stats.totalRetencionesMed)}</p>
                 </div>
 
                 {/* Saldo Neto */}
-                <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
+                <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Resultado / Saldo Mes</p>
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs font-medium text-slate-400 uppercase tracking-wider truncate">Saldo Mes</p>
                       <h3
-                        className={`text-xl font-bold mt-1 ${
+                        className={`text-base sm:text-xl font-bold mt-0.5 sm:mt-1 truncate ${
                           stats.saldoNeto >= 0 ? 'text-blue-400' : 'text-amber-400'
                         }`}
                       >
                         {fmtMoney(stats.saldoNeto)}
                       </h3>
                     </div>
-                    <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400 border border-blue-500/20">
-                      <DollarSign className="w-5 h-5" />
+                    <div className="p-1.5 sm:p-2 bg-blue-500/10 rounded-lg text-blue-400 border border-blue-500/20 shrink-0">
+                      <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-2">{stats.totalRegistros} movimientos registrados</p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 truncate">{stats.totalRegistros} registros</p>
                 </div>
               </div>
 
               {/* FILTROS & BÚSQUEDA */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3 flex-1 min-w-[280px]">
-                  <div className="relative w-full max-w-md">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="relative w-full">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 sm:top-3 pointer-events-none" />
                     <input
                       type="text"
                       placeholder="Buscar por médico, proveedor, factura o cheque..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                   {/* Filtro Rubro */}
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-slate-400" />
+                  <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
+                    <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <select
                       value={selectedRubro}
                       onChange={(e) => setSelectedRubro(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 font-medium"
+                      className="w-full sm:w-auto bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 focus:outline-none focus:border-blue-500 font-medium"
                     >
-                      <option value="TODOS">Todos los Rubros</option>
+                      <option value="TODOS">Rubros</option>
                       {maestros.rubros?.map((r) => (
                         <option key={r} value={r}>
                           {r}
@@ -1624,18 +1696,20 @@ export default function App() {
                   </div>
 
                   {/* Filtro Sede */}
-                  <select
-                    value={selectedSede}
-                    onChange={(e) => setSelectedSede(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 font-medium"
-                  >
-                    <option value="TODAS">Todas las Sedes</option>
-                    {maestros.sedes?.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1 sm:flex-initial">
+                    <select
+                      value={selectedSede}
+                      onChange={(e) => setSelectedSede(e.target.value)}
+                      className="w-full sm:w-auto bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 focus:outline-none focus:border-blue-500 font-medium"
+                    >
+                      <option value="TODAS">Sedes</option>
+                      {maestros.sedes?.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -1854,83 +1928,88 @@ export default function App() {
           {/* TAB 4: LIQUIDACIONES MÉDICAS */}
           {activeTab === 'medicos' && (
             <div className="space-y-4">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex justify-between items-center">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-white">Liquidación de Honorarios Médicos</h3>
                   <p className="text-xs text-slate-400">
                     Detalle de profesionales, comprobantes, retenciones aplicadas y neto a liquidar.
                   </p>
                 </div>
-                <div className="flex gap-4 font-mono text-xs">
-                  <span className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-                    Total Bruto: <strong className="text-indigo-400">{fmtMoney(stats.totalPagosMed)}</strong>
-                  </span>
-                  <span className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-                    Retenciones: <strong className="text-amber-400">{fmtMoney(stats.totalRetencionesMed)}</strong>
-                  </span>
-                  <span className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800">
-                    Neto a Transferir: <strong className="text-emerald-400">{fmtMoney(stats.totalNetoMed)}</strong>
-                  </span>
+                <div className="grid grid-cols-3 sm:flex gap-2 sm:gap-4 font-mono text-[11px] sm:text-xs">
+                  <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
+                    <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Bruto:</span>
+                    <strong className="text-indigo-400">{fmtMoney(stats.totalPagosMed)}</strong>
+                  </div>
+                  <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
+                    <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Retenciones:</span>
+                    <strong className="text-amber-400">{fmtMoney(stats.totalRetencionesMed)}</strong>
+                  </div>
+                  <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
+                    <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Neto:</span>
+                    <strong className="text-emerald-400">{fmtMoney(stats.totalNetoMed)}</strong>
+                  </div>
                 </div>
               </div>
 
               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-950/80 sticky top-0 border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
-                    <tr>
-                      <th className="py-3 px-4">Fecha</th>
-                      <th className="py-3 px-4">Factura Nº</th>
-                      <th className="py-3 px-4">Médico / Profesional</th>
-                      <th className="py-3 px-4">Período / Detalle</th>
-                      <th className="py-3 px-4">Fecha Pago / Referencia</th>
-                      <th className="py-3 px-4 text-right">Bruto</th>
-                      <th className="py-3 px-4 text-right">Retención</th>
-                      <th className="py-3 px-4 text-right">Neto Liquidado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60 font-medium">
-                    {medicosData.map((m, i) => (
-                      <tr key={m.id || i} className="hover:bg-slate-800/40">
-                        <td className="py-3 px-4 text-slate-300">{m.fecha}</td>
-                        <td className="py-3 px-4 font-mono text-slate-400">{m.facturaNro}</td>
-                        <td className="py-3 px-4 text-white font-bold">{m.empresaConcepto}</td>
-                        <td className="py-3 px-4 text-slate-400">{m.detalle}</td>
-                        <td className="py-3 px-4 text-slate-400">
-                          {m.fechaPago ? (
-                            <span>{m.fechaPago} ({m.chequeOperacion || 'OP-TRANSF'})</span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                              <AlertCircle className="w-3 h-3 text-amber-400" />
-                              PENDIENTE
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-indigo-300 font-semibold">
-                          {fmtMoney(m.pagosMed)}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-amber-400">
-                          {fmtMoney(m.retencionesMed)}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-emerald-400 font-bold text-sm">
-                          {fmtMoney(m.netoPagadoMed)}
-                        </td>
+                <div className="overflow-x-auto max-h-[580px]">
+                  <table className="w-full text-left text-xs border-collapse min-w-[700px]">
+                    <thead className="bg-slate-950/80 sticky top-0 border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
+                      <tr>
+                        <th className="py-3 px-4">Fecha</th>
+                        <th className="py-3 px-4">Factura Nº</th>
+                        <th className="py-3 px-4">Médico / Profesional</th>
+                        <th className="py-3 px-4">Período / Detalle</th>
+                        <th className="py-3 px-4">Fecha Pago / Referencia</th>
+                        <th className="py-3 px-4 text-right">Bruto</th>
+                        <th className="py-3 px-4 text-right">Retención</th>
+                        <th className="py-3 px-4 text-right">Neto Liquidado</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                      {medicosData.map((m, i) => (
+                        <tr key={m.id || i} className="hover:bg-slate-800/40">
+                          <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{m.fecha}</td>
+                          <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">{m.facturaNro}</td>
+                          <td className="py-3 px-4 text-white font-bold whitespace-nowrap">{m.empresaConcepto}</td>
+                          <td className="py-3 px-4 text-slate-400 max-w-[200px] truncate">{m.detalle}</td>
+                          <td className="py-3 px-4 text-slate-400 whitespace-nowrap">
+                            {m.fechaPago ? (
+                              <span>{m.fechaPago} ({m.chequeOperacion || 'OP-TRANSF'})</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                <AlertCircle className="w-3 h-3 text-amber-400" />
+                                PENDIENTE
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-indigo-300 font-semibold whitespace-nowrap">
+                            {fmtMoney(m.pagosMed)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-amber-400 whitespace-nowrap">
+                            {fmtMoney(m.retencionesMed)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-emerald-400 font-bold text-sm whitespace-nowrap">
+                            {fmtMoney(m.netoPagadoMed)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
 
           {/* TAB 5: TABLAS MAESTRAS (CRUD COMPLETO) */}
           {activeTab === 'maestros' && (
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-6">
               {/* Catalogs Header and Tabs */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                   <div>
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                      <Layers className="w-5 h-5 text-blue-400" />
+                    <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-blue-400 shrink-0" />
                       Gestión de Tablas Maestras y Catálogos
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
@@ -1939,13 +2018,13 @@ export default function App() {
                   </div>
 
                   {/* Catalog Category Selector Tabs */}
-                  <div className="flex flex-wrap gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold">
+                  <div className="flex flex-wrap gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold overflow-x-auto">
                     <button
                       onClick={() => {
                         setActiveCatalogTab('proveedores')
                         setEditingItem(null)
                       }}
-                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
                         activeCatalogTab === 'proveedores'
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'text-slate-400 hover:text-white'
@@ -1960,7 +2039,7 @@ export default function App() {
                         setActiveCatalogTab('medicos')
                         setEditingItem(null)
                       }}
-                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
                         activeCatalogTab === 'medicos'
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'text-slate-400 hover:text-white'
@@ -1975,14 +2054,14 @@ export default function App() {
                         setActiveCatalogTab('empleados')
                         setEditingItem(null)
                       }}
-                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
                         activeCatalogTab === 'empleados'
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       <Users className="w-3.5 h-3.5" />
-                      Empleados ({maestros.empleados?.length || 0})
+                      Personal ({maestros.empleados?.length || 0})
                     </button>
 
                     <button
@@ -1990,7 +2069,7 @@ export default function App() {
                         setActiveCatalogTab('sedes')
                         setEditingItem(null)
                       }}
-                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
                         activeCatalogTab === 'sedes'
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'text-slate-400 hover:text-white'
@@ -2005,20 +2084,20 @@ export default function App() {
                         setActiveCatalogTab('impuestos')
                         setEditingItem(null)
                       }}
-                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
                         activeCatalogTab === 'impuestos'
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       <Scale className="w-3.5 h-3.5" />
-                      Impuestos & Org. ({maestros.impuestos?.length || 0})
+                      Impuestos ({maestros.impuestos?.length || 0})
                     </button>
                   </div>
                 </div>
 
                 {/* Form to Add New Item + Search Filter */}
-                <div className="pt-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                <div className="pt-4 grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 items-center">
                   {/* Add Input */}
                   <form
                     onSubmit={(e) => {
@@ -2043,11 +2122,11 @@ export default function App() {
                       }`}
                       value={newItemName}
                       onChange={(e) => setNewItemName(e.target.value)}
-                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-medium"
+                      className="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-medium"
                     />
                     <button
                       type="submit"
-                      className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition cursor-pointer"
+                      className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition cursor-pointer shrink-0"
                     >
                       <PlusCircle className="w-4 h-4" />
                       <span>Agregar</span>
@@ -2056,13 +2135,13 @@ export default function App() {
 
                   {/* Search filter within catalog */}
                   <div className="md:col-span-5 relative">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 sm:top-3 pointer-events-none" />
                     <input
                       type="text"
                       placeholder={`Filtrar en ${activeCatalogTab}...`}
                       value={catalogSearch}
                       onChange={(e) => setCatalogSearch(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
@@ -2070,7 +2149,7 @@ export default function App() {
 
               {/* Items List Table / Cards with Edit and Delete */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-                <div className="p-4 bg-slate-950/60 border-b border-slate-800 flex justify-between items-center text-xs">
+                <div className="p-3.5 sm:p-4 bg-slate-950/60 border-b border-slate-800 flex justify-between items-center text-xs">
                   <span className="font-semibold text-slate-300 uppercase tracking-wider">
                     Listado de {activeCatalogTab}
                   </span>
@@ -2094,11 +2173,11 @@ export default function App() {
                       return (
                         <div
                           key={index}
-                          className="px-5 py-3 flex items-center justify-between hover:bg-slate-800/40 transition group"
+                          className="px-3.5 sm:px-5 py-3 flex items-center justify-between hover:bg-slate-800/40 transition group"
                         >
                           {/* Item Name or Edit Input */}
-                          <div className="flex-1 flex items-center gap-3 pr-4">
-                            <span className="text-xs font-mono text-slate-500 w-7">#{index + 1}</span>
+                          <div className="flex-1 flex items-center gap-2 sm:gap-3 pr-2 sm:pr-4 min-w-0">
+                            <span className="text-xs font-mono text-slate-500 w-6 sm:w-7 shrink-0">#{index + 1}</span>
 
                             {isEditing ? (
                               <div className="flex items-center gap-2 flex-1 max-w-md">
@@ -2133,29 +2212,29 @@ export default function App() {
                                 </button>
                               </div>
                             ) : (
-                              <span className="text-xs font-semibold text-slate-200">{item}</span>
+                              <span className="text-xs font-semibold text-slate-200 truncate">{item}</span>
                             )}
                           </div>
 
                           {/* Action Buttons */}
                           {!isEditing && (
-                            <div className="flex items-center gap-2 opacity-80 group-hover:opacity-100 transition">
+                            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                               <button
                                 type="button"
                                 onClick={() => handleStartEdit(activeCatalogTab, item)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-blue-600/20 text-slate-300 hover:text-blue-400 border border-slate-700 hover:border-blue-500/40 transition cursor-pointer"
+                                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-blue-600/20 text-slate-300 hover:text-blue-400 border border-slate-700 hover:border-blue-500/40 transition cursor-pointer"
                               >
                                 <Edit2 className="w-3 h-3" />
-                                <span>Modificar</span>
+                                <span className="hidden sm:inline">Modificar</span>
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() => handleDeleteItem(activeCatalogTab, item)}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 transition cursor-pointer"
+                                className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 transition cursor-pointer"
                               >
                                 <Trash2 className="w-3 h-3" />
-                                <span>Quitar</span>
+                                <span className="hidden sm:inline">Quitar</span>
                               </button>
                             </div>
                           )}
@@ -2171,13 +2250,13 @@ export default function App() {
 
       {/* MODAL DE CARGA RÁPIDA */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
-              <div className="flex items-center gap-3">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <div
-                  className={`p-2 rounded-lg ${
+                  className={`p-2 rounded-lg shrink-0 ${
                     modalType === 'INGRESO'
                       ? 'bg-emerald-500/10 text-emerald-400'
                       : modalType === 'MEDICO'
@@ -2187,26 +2266,26 @@ export default function App() {
                 >
                   <PlusCircle className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-base text-white">
-                    {modalType === 'EGRESO' && 'Cargar Egreso / Factura de Proveedor o Impuesto'}
-                    {modalType === 'MEDICO' && 'Cargar Liquidación de Honorario Médico'}
-                    {modalType === 'INGRESO' && 'Cargar Ingreso (Policlínica / Salón / Cantina)'}
+                <div className="min-w-0">
+                  <h3 className="font-bold text-sm sm:text-base text-white truncate">
+                    {modalType === 'EGRESO' && 'Cargar Egreso / Factura'}
+                    {modalType === 'MEDICO' && 'Cargar Honorario Médico'}
+                    {modalType === 'INGRESO' && 'Cargar Ingreso'}
                   </h3>
                   <p className="text-xs text-slate-400">Período: {selectedMes}</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSaveMovement} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSaveMovement} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha Emisión</label>
                   <input
@@ -2329,7 +2408,7 @@ export default function App() {
                   </div>
                 </div>
               ) : modalType === 'EGRESO' ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="text-xs font-semibold text-slate-300 block mb-1">Rubro</label>
                     <select
@@ -2451,7 +2530,7 @@ export default function App() {
               )}
 
               {/* Sede y Detalle Corto */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Sede / Ubicación</label>
                   <select
@@ -2470,7 +2549,7 @@ export default function App() {
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Período / Detalle Resumido</label>
                   <input
                     type="text"
-                    placeholder="Ej: Hon Ene 26, Gastos Generales, Mantenimiento..."
+                    placeholder="Ej: Hon Ene 26, Gastos Generales..."
                     value={formData.detalle}
                     onChange={(e) => handleInputChange('detalle', e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
@@ -2484,11 +2563,11 @@ export default function App() {
                   <label className="text-xs font-semibold text-slate-300 block">
                     Detalle Extenso / Descripción Completa
                   </label>
-                  <span className="text-[10px] text-slate-500 font-mono">Texto enriquecido / Multi-línea</span>
+                  <span className="text-[10px] text-slate-500 font-mono">Multi-línea</span>
                 </div>
                 <textarea
                   rows={3}
-                  placeholder="Escribe aquí información detallada: descripción de insumos, ítems de la factura, presupuestos, notas adicionales, número de expediente, etc..."
+                  placeholder="Escribe aquí información detallada: descripción de insumos, ítems de la factura, notas adicionales..."
                   value={formData.detalleExtenso}
                   onChange={(e) => handleInputChange('detalleExtenso', e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 leading-relaxed font-sans"
@@ -2512,9 +2591,9 @@ export default function App() {
               )}
 
               {modalType === 'MEDICO' && (
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
+                <div className="bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800 space-y-3 sm:space-y-4">
                   {/* Checkbox para activar/desactivar retención */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <input
                         type="checkbox"
@@ -2523,12 +2602,12 @@ export default function App() {
                         className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-950 cursor-pointer accent-blue-600"
                       />
                       <span className="text-xs font-semibold text-slate-200">
-                        Aplicar Retención Impositiva / Administrativa
+                        Aplicar Retención Impositiva
                       </span>
                     </label>
 
                     {formData.aplicarRetencion && (
-                      <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800">
+                      <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 self-start sm:self-auto">
                         <span className="text-[11px] text-slate-400 font-medium">Porcentaje:</span>
                         <input
                           type="number"
@@ -2544,7 +2623,7 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="text-[11px] font-semibold text-indigo-400 block mb-1">Bruto Facturado ($)</label>
                       <input
@@ -2590,9 +2669,9 @@ export default function App() {
               )}
 
               {modalType === 'INGRESO' && (
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                <div className="bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800 space-y-3">
                   <p className="text-xs font-semibold text-slate-300">Desglose de Ingresos por Concepto ($)</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                     <div>
                       <label className="text-[11px] text-slate-400 block">Alquiler Salón</label>
                       <input
@@ -2652,8 +2731,8 @@ export default function App() {
               )}
 
               {/* Pago / Cheque */}
-              <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
+              <div className="bg-slate-950/60 p-3 sm:p-3.5 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                     <CreditCard className="w-3.5 h-3.5 text-blue-400" />
                     Estado y Medio de Pago
@@ -2681,10 +2760,10 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <label className="text-[11px] font-medium text-slate-400 block mb-1">
-                      Fecha de Pago {formData.fechaPago ? '' : '(Opcional / Dejar vacío si está pendiente)'}
+                      Fecha de Pago {formData.fechaPago ? '' : '(Opcional)'}
                     </label>
                     <input
                       type="date"
@@ -2695,11 +2774,11 @@ export default function App() {
                   </div>
                   <div>
                     <label className="text-[11px] font-medium text-slate-400 block mb-1">
-                      Cheque / Ref. Operación {formData.fechaPago ? '' : '(Opcional)'}
+                      Cheque / Ref. {formData.fechaPago ? '' : '(Opcional)'}
                     </label>
                     <input
                       type="text"
-                      placeholder="Nº de Cheque, Transf, o detalle..."
+                      placeholder="Nº de Cheque, Transf, etc..."
                       value={formData.chequeOperacion}
                       onChange={(e) => handleInputChange('chequeOperacion', e.target.value)}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
@@ -2709,17 +2788,17 @@ export default function App() {
               </div>
 
               {/* Submit Buttons */}
-              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+              <div className="pt-3 sm:pt-4 border-t border-slate-800 flex justify-end gap-2.5 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                  className="px-3.5 sm:px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition"
+                  className="px-4 sm:px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition"
                 >
                   Guardar Movimiento
                 </button>
