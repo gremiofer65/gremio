@@ -151,24 +151,55 @@ export default function App() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isMobileCCDetailOpen, setIsMobileCCDetailOpen] = useState(false)
 
+const MONTH_ORDER = {
+  'ENERO': 1,
+  'FEBRERO': 2,
+  'MARZO': 3,
+  'ABRIL': 4,
+  'MAYO': 5,
+  'JUNIO': 6,
+  'JULIO': 7,
+  'AGOSTO': 8,
+  'SETIEMBRE': 9,
+  'SEPTIEMBRE': 9,
+  'OCTUBRE': 10,
+  'NOVIEMBRE': 11,
+  'DICIEMBRE': 12
+}
+
+const sortPeriodsChronologically = (periodList) => {
+  return [...periodList].sort((a, b) => {
+    const partsA = a.trim().split(' ')
+    const partsB = b.trim().split(' ')
+    
+    const monthA = partsA[0]?.toUpperCase() || ''
+    const yearA = parseInt(partsA[partsA.length - 1]?.length === 2 ? `20${partsA[partsA.length - 1]}` : partsA[partsA.length - 1]) || 2026
+
+    const monthB = partsB[0]?.toUpperCase() || ''
+    const yearB = parseInt(partsB[partsB.length - 1]?.length === 2 ? `20${partsB[partsB.length - 1]}` : partsB[partsB.length - 1]) || 2026
+
+    if (yearA !== yearB) return yearA - yearB
+    return (MONTH_ORDER[monthA] || 0) - (MONTH_ORDER[monthB] || 0)
+  })
+}
+
   // Data state
   const [movimientos, setMovimientos] = useState(initialData.movimientos || initialData.movimientosEnero || [])
   const [maestros, setMaestros] = useState(initialData.maestros || {})
   const [meses, setMeses] = useState(() => {
-    return (
-      (initialData.meses || []).map((m) => m.trim()) || [
-        'ENERO 26',
-        'FEBRERO 26',
-        'MARZO 26',
-        'ABRIL 26',
-        'MAYO 26',
-        'JUNIO 26',
-        'JULIO 26',
-        'AGOSTO 26',
-        'SETIEMBRE 26',
-        'OCTUBRE 26'
-      ]
-    )
+    const defaultMeses = [
+      'ENERO 26',
+      'FEBRERO 26',
+      'MARZO 26',
+      'ABRIL 26',
+      'MAYO 26',
+      'JUNIO 26',
+      'JULIO 26',
+      'AGOSTO 26',
+      'SETIEMBRE 26',
+      'OCTUBRE 26'
+    ]
+    return sortPeriodsChronologically(initialData.meses || defaultMeses)
   })
   const [isLoadingDB, setIsLoadingDB] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
@@ -177,14 +208,14 @@ export default function App() {
   const loadDataFromSupabase = useCallback(async () => {
     try {
       setIsSyncing(true)
-      // 1. Cargar Períodos
+      // 1. Cargar Períodos y ordenarlos cronológicamente
       const { data: dbPeriodos } = await supabase
         .from('periodos')
         .select('*')
-        .order('nombre', { ascending: true })
 
       if (dbPeriodos && dbPeriodos.length > 0) {
-        setMeses(dbPeriodos.map((p) => p.nombre.trim()))
+        const sorted = sortPeriodsChronologically(dbPeriodos.map((p) => p.nombre.trim()))
+        setMeses(sorted)
       }
 
       // 2. Cargar Tablas Maestras
@@ -269,11 +300,12 @@ export default function App() {
     return Array.from(yearsSet).sort()
   }, [meses])
 
-  // Filtered periods list based on selected year
+  // Filtered periods list based on selected year (cronológico)
   const filteredPeriods = useMemo(() => {
-    if (selectedYear === 'TODOS') return meses
+    const sorted = sortPeriodsChronologically(meses)
+    if (selectedYear === 'TODOS') return sorted
     const shortYear = selectedYear.slice(-2) // e.g. '26' from '2026'
-    return meses.filter((m) => {
+    return sorted.filter((m) => {
       const parts = m.trim().split(' ')
       const y = parts[parts.length - 1]
       return y === shortYear || y === selectedYear
@@ -293,7 +325,7 @@ export default function App() {
       return
     }
 
-    const updated = [...meses, formattedPeriod]
+    const updated = sortPeriodsChronologically([...meses, formattedPeriod])
     setMeses(updated)
     setSelectedMes(formattedPeriod)
     setSelectedYear(newPeriodYear)
@@ -3378,13 +3410,13 @@ export default function App() {
                 <label className="text-xs font-semibold text-slate-300 block mb-1.5">
                   Año / Ejercicio
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['2025', '2026', '2027'].map((yr) => (
+                <div className="flex flex-wrap gap-2">
+                  {['2025', '2026', '2027', '2028', '2029', '2030'].map((yr) => (
                     <button
                       key={yr}
                       type="button"
                       onClick={() => setNewPeriodYear(yr)}
-                      className={`py-2 rounded-xl text-xs font-bold border transition ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
                         newPeriodYear === yr
                           ? 'bg-blue-600 text-white border-blue-500 shadow-md'
                           : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
@@ -3394,15 +3426,15 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <div className="mt-2">
+                <div className="mt-2.5">
                   <input
                     type="number"
                     min="2020"
                     max="2050"
-                    placeholder="O escribe otro año (ej: 2028)"
+                    placeholder="O escribe otro año específico (ej: 2031, 2032...)"
                     value={newPeriodYear}
                     onChange={(e) => setNewPeriodYear(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
               </div>
