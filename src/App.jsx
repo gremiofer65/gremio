@@ -1930,8 +1930,9 @@ export default function App() {
                         <th className="py-3 px-3">Comprobante</th>
                         <th className="py-3 px-3">Rubro</th>
                         <th className="py-3 px-3">Empresa / Médico / Beneficiario</th>
-                        <th className="py-3 px-3">Detalle / Sede</th>
-                        <th className="py-3 px-3">Fecha Pago / Referencia</th>
+                        <th className="py-3 px-3">Sede</th>
+                        <th className="py-3 px-3">Detalle / Concepto</th>
+                        <th className="py-3 px-3">Fecha Pago / Ref.</th>
                         <th className="py-3 px-3 text-right">Egresos Grales</th>
                         <th className="py-3 px-3 text-right">Honorario Bruto</th>
                         <th className="py-3 px-3 text-right">Retenciones</th>
@@ -1942,7 +1943,7 @@ export default function App() {
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {filteredMovimientos.length === 0 ? (
                         <tr>
-                          <td colSpan={11} className="py-12 text-center text-slate-500">
+                          <td colSpan={12} className="py-12 text-center text-slate-500">
                             No se encontraron movimientos para los filtros seleccionados.
                           </td>
                         </tr>
@@ -1984,20 +1985,29 @@ export default function App() {
                               </td>
 
                               {/* Empresa / Concepto */}
-                              <td className="py-2.5 px-3 text-slate-200 font-semibold max-w-[220px] truncate">
+                              <td className="py-2.5 px-3 text-slate-200 font-semibold max-w-[200px] truncate">
                                 {m.empresaConcepto}
                               </td>
 
-                              {/* Detalle & Sede */}
+                              {/* Sede */}
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                {m.realizadoEn ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                                    <Building2 className="w-3 h-3 text-blue-400" />
+                                    {m.realizadoEn}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-600 text-xs">-</span>
+                                )}
+                              </td>
+
+                              {/* Detalle */}
                               <td className="py-2.5 px-3 text-slate-400 max-w-[200px]">
                                 <div className="font-medium text-slate-300 truncate">{m.detalle || '-'}</div>
                                 {m.detalleExtenso && (
                                   <div className="text-[11px] text-slate-400/90 italic truncate" title={m.detalleExtenso}>
                                     📝 {m.detalleExtenso}
                                   </div>
-                                )}
-                                {m.realizadoEn && (
-                                  <span className="text-[10px] text-slate-500 block">{m.realizadoEn}</span>
                                 )}
                               </td>
 
