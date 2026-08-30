@@ -60,7 +60,9 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  AreaChart,
+  Area
 } from 'recharts'
 
 export default function App() {
@@ -849,7 +851,86 @@ export default function App() {
     }))
   }, [movimientos, selectedMes])
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+  // Chart Data 2: Evolución Mensual de Ingresos vs Egresos (Comparativa Multi-período)
+  const evolucionMensualData = useMemo(() => {
+    const periodosList = meses.slice().reverse()
+    return periodosList.map((p) => {
+      const pMovs = movimientos.filter((m) => m.mesPeriodo && m.mesPeriodo.trim() === p.trim())
+      let ing = 0
+      let egr = 0
+
+      pMovs.forEach((m) => {
+        if (m.rubro === 'INGRESOS') {
+          ing += Number(
+            m.total || (
+              Number(m.alquilerCpoSalon || 0) +
+              Number(m.ventaCantina || 0) +
+              Number(m.usoNatatorio || 0) +
+              Number(m.alquiConsultorios || 0) +
+              Number(m.practicas || 0) +
+              Number(m.consultas || 0) +
+              Number(m.enfermeria || 0) +
+              Number(m.odontologia || 0) +
+              Number(m.otIngresos || 0) +
+              Number(m.compensaciones || 0)
+            )
+          )
+        } else {
+          egr += Number(m.pagosS || 0) + Number(m.netoPagadoMed || 0)
+        }
+      })
+
+      return {
+        mes: p,
+        Ingresos: ing,
+        Egresos: egr,
+        Superavit: ing - egr
+      }
+    })
+  }, [meses, movimientos])
+
+  // Chart Data 3: Distribución del Gasto por Sede
+  const gastosPorSedeData = useMemo(() => {
+    const sedeMap = {}
+    const periodMovs = selectedMes
+      ? movimientos.filter((m) => (m.mesPeriodo ? m.mesPeriodo.trim() === selectedMes.trim() : true))
+      : movimientos
+
+    periodMovs.forEach((m) => {
+      if (m.rubro === 'INGRESOS') return
+      const s = m.realizadoEn || 'Sede Central / Gral'
+      const amount = Number(m.pagosS || 0) + Number(m.netoPagadoMed || 0)
+      sedeMap[s] = (sedeMap[s] || 0) + amount
+    })
+
+    return Object.keys(sedeMap)
+      .map((k) => ({ name: k, total: sedeMap[k] }))
+      .sort((a, b) => b.total - a.total)
+  }, [movimientos, selectedMes])
+
+  // Chart Data 4: Top 5 Proveedores / Médicos con Mayor Gasto del Período
+  const topEntidadesGasto = useMemo(() => {
+    const entMap = {}
+    const periodMovs = selectedMes
+      ? movimientos.filter((m) => (m.mesPeriodo ? m.mesPeriodo.trim() === selectedMes.trim() : true))
+      : movimientos
+
+    periodMovs.forEach((m) => {
+      if (m.rubro === 'INGRESOS') return
+      const ent = m.empresaConcepto || 'Sin Especificar'
+      const amount = Number(m.pagosS || 0) + Number(m.netoPagadoMed || 0)
+      if (!entMap[ent]) {
+        entMap[ent] = { nombre: ent, total: 0, rubro: m.rubro }
+      }
+      entMap[ent].total += amount
+    })
+
+    return Object.values(entMap)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+  }, [movimientos, selectedMes])
+
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899']
 
   // Handle Form Change with Auto Calculations
   const handleInputChange = (field, value) => {
@@ -2076,67 +2157,285 @@ export default function App() {
             </div>
           )}
 
-          {/* TAB 3: DASHBOARD & BALANCES */}
+          {/* TAB 3: DASHBOARD & BALANCES PROFESIONAL */}
           {activeTab === 'dashboard' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Gráfico 1: Egresos por Rubro */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
-                <h4 className="text-sm font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                  <PieChart className="w-4 h-4 text-blue-400" />
-                  Distribución de Egresos por Rubro
-                </h4>
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={egresosPorRubroData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={95}
-                        paddingAngle={4}
-                        dataKey="valor"
-                      >
-                        {egresosPorRubroData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(val) => fmtMoney(val)}
-                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }}
-                      />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
+            <div className="space-y-6">
+              {/* Executive KPI Summary Header */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Ingresos KPI Card */}
+                <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-emerald-500/40 transition">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[11px] font-bold text-emerald-400/90 uppercase tracking-wider flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        Ingresos Totales
+                      </span>
+                      <h3 className="text-2xl font-black text-white mt-1 font-mono">{fmtMoney(stats.totalIngresos)}</h3>
+                    </div>
+                    <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400 group-hover:scale-110 transition">
+                      <ArrowUpRight className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Período: <strong className="text-slate-200">{selectedMes}</strong></span>
+                    <span className="text-emerald-400 font-semibold">Cobros Registrados</span>
+                  </div>
+                </div>
+
+                {/* Egresos Operativos KPI Card */}
+                <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-rose-500/40 transition">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[11px] font-bold text-rose-400/90 uppercase tracking-wider flex items-center gap-1.5">
+                        <TrendingDown className="w-3.5 h-3.5" />
+                        Egresos Operativos
+                      </span>
+                      <h3 className="text-2xl font-black text-white mt-1 font-mono">{fmtMoney(stats.totalEgresosTotal)}</h3>
+                    </div>
+                    <div className="p-3 bg-rose-500/10 rounded-xl border border-rose-500/20 text-rose-400 group-hover:scale-110 transition">
+                      <ArrowDownRight className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Proveedores + Sueldos</span>
+                    <span className="text-rose-400 font-semibold">{fmtMoney(stats.totalEgresosS)}</span>
+                  </div>
+                </div>
+
+                {/* Honorarios Médicos Netos KPI Card */}
+                <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-indigo-500/40 transition">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[11px] font-bold text-indigo-400/90 uppercase tracking-wider flex items-center gap-1.5">
+                        <UserCheck className="w-3.5 h-3.5" />
+                        Neto Honorarios
+                      </span>
+                      <h3 className="text-2xl font-black text-indigo-300 mt-1 font-mono">{fmtMoney(stats.totalNetoMed)}</h3>
+                    </div>
+                    <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400 group-hover:scale-110 transition">
+                      <Receipt className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Retenciones aplicadas:</span>
+                    <strong className="text-amber-400 font-mono">{fmtMoney(stats.totalRetencionesMed)}</strong>
+                  </div>
+                </div>
+
+                {/* Balance Neto / Superávit KPI Card */}
+                <div className={`bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border rounded-2xl p-5 shadow-xl relative overflow-hidden group transition ${
+                  stats.saldoNeto >= 0 ? 'border-blue-500/30 hover:border-blue-400' : 'border-amber-500/30 hover:border-amber-400'
+                }`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className={`text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                        stats.saldoNeto >= 0 ? 'text-blue-400' : 'text-amber-400'
+                      }`}>
+                        <Scale className="w-3.5 h-3.5" />
+                        {stats.saldoNeto >= 0 ? 'Superávit Financiero' : 'Déficit del Período'}
+                      </span>
+                      <h3 className={`text-2xl font-black mt-1 font-mono ${
+                        stats.saldoNeto >= 0 ? 'text-blue-300' : 'text-amber-300'
+                      }`}>
+                        {fmtMoney(stats.saldoNeto)}
+                      </h3>
+                    </div>
+                    <div className={`p-3 rounded-xl border group-hover:scale-110 transition ${
+                      stats.saldoNeto >= 0 ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                    }`}>
+                      <DollarSign className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Margen Operativo:</span>
+                    <strong className={stats.saldoNeto >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                      {stats.totalIngresos > 0 ? `${((stats.saldoNeto / stats.totalIngresos) * 100).toFixed(1)}%` : '0%'}
+                    </strong>
+                  </div>
                 </div>
               </div>
 
-              {/* Gráfico 2: Desglose Honorarios vs Retenciones */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
-                <h4 className="text-sm font-semibold text-slate-200 mb-4 flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-emerald-400" />
-                  Comparativa Honorarios Médicos
-                </h4>
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={[
-                        { name: 'Bruto Facturado', valor: stats.totalPagosMed },
-                        { name: 'Retenciones Impositivas', valor: stats.totalRetencionesMed },
-                        { name: 'Neto Pagado', valor: stats.totalNetoMed }
-                      ]}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              {/* Central Charts Grid: Multi-Period Evolution & Category Breakdown */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Chart 1: Evolución Temporal Multi-Período (Ingresos vs Egresos) */}
+                <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-800">
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-blue-400" />
+                        Evolución Histórica de Ingresos y Egresos
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Tendencia consolidada mes a mes del flujo de caja
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-mono">
+                      <span className="flex items-center gap-1.5 text-emerald-400">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        Ingresos
+                      </span>
+                      <span className="flex items-center gap-1.5 text-rose-400">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                        Egresos
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="h-80 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={evolucionMensualData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorIng" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.0}/>
+                          </linearGradient>
+                          <linearGradient id="colorEgr" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="mes" stroke="#64748b" textAnchor="end" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
+                        <Tooltip
+                          formatter={(val) => fmtMoney(val)}
+                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}
+                        />
+                        <Area type="monotone" dataKey="Ingresos" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorIng)" />
+                        <Area type="monotone" dataKey="Egresos" stroke="#f43f5e" strokeWidth={2.5} fillOpacity={1} fill="url(#colorEgr)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Chart 2: Distribución de Egresos por Rubro (Doughnut) */}
+                <div className="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                  <div className="pb-4 border-b border-slate-800">
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <PieChart className="w-4 h-4 text-indigo-400" />
+                      Egresos por Rubro
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">Composición del gasto en {selectedMes}</p>
+                  </div>
+
+                  <div className="h-64 w-full my-auto">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={egresosPorRubroData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={85}
+                          paddingAngle={3}
+                          dataKey="valor"
+                        >
+                          {egresosPorRubroData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(val) => fmtMoney(val)}
+                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Leyenda personalizada con porcentajes */}
+                  <div className="space-y-1.5 pt-3 border-t border-slate-800 text-xs">
+                    {egresosPorRubroData.slice(0, 4).map((r, i) => {
+                      const pct = stats.totalEgresosTotal > 0 ? ((r.valor / stats.totalEgresosTotal) * 100).toFixed(1) : 0
+                      return (
+                        <div key={r.name} className="flex items-center justify-between">
+                          <span className="flex items-center gap-2 text-slate-300 truncate">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}></span>
+                            {r.name}
+                          </span>
+                          <span className="font-mono text-slate-400 font-semibold">{pct}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Row: Gastos por Sede & Top 5 Mayores Desembolsos */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Gastos por Sede */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+                  <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-amber-400" />
+                        Distribución del Gasto por Sede
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">Asignación de costos por establecimiento en {selectedMes}</p>
+                    </div>
+                  </div>
+
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={gastosPorSedeData} layout="vertical" margin={{ top: 5, right: 20, left: 40, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                        <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
+                        <YAxis type="category" dataKey="name" stroke="#64748b" tick={{ fontSize: 11 }} />
+                        <Tooltip
+                          formatter={(val) => fmtMoney(val)}
+                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem' }}
+                        />
+                        <Bar dataKey="total" fill="#f59e0b" radius={[0, 6, 6, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Top 5 Entidades / Médicos con Mayor Desembolso */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
+                      <div>
+                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                          <DollarSign className="w-4 h-4 text-emerald-400" />
+                          Mayores Desembolsos del Período
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-0.5">Top 5 proveedores y profesionales en {selectedMes}</p>
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-slate-800/70">
+                      {topEntidadesGasto.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-500">Sin movimientos registrados en este período.</div>
+                      ) : (
+                        topEntidadesGasto.map((ent, idx) => (
+                          <div key={ent.nombre} className="py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-3 min-w-0 pr-4">
+                              <span className="w-6 h-6 rounded-lg bg-slate-950 text-blue-400 border border-slate-800 flex items-center justify-center font-mono text-xs font-bold shrink-0">
+                                {idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-white truncate">{ent.nombre}</p>
+                                <span className="text-[10px] text-slate-400 font-medium">{ent.rubro}</span>
+                              </div>
+                            </div>
+                            <span className="text-xs font-mono font-bold text-rose-400 shrink-0">
+                              {fmtMoney(ent.total)}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+                    <span>Cuentas con mayor impacto financiero</span>
+                    <button
+                      onClick={() => setActiveTab('cuentacorriente')}
+                      className="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 transition cursor-pointer"
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="name" stroke="#64748b" />
-                      <YAxis stroke="#64748b" />
-                      <Tooltip
-                        formatter={(val) => fmtMoney(val)}
-                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }}
-                      />
-                      <Bar dataKey="valor" fill="#6366f1" radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                      Ver Extractos <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
