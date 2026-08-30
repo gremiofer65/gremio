@@ -2,8 +2,7 @@
   "name": "sistema-root",
   "private": true,
   "scripts": {
-    "dev": "npm run dev --prefix web",
-    "build": "npm run build --prefix web",
-    "start": "npm run preview --prefix web"
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web install && npm --prefix web run build"
   }
 }
