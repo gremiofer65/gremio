@@ -64,46 +64,83 @@ import {
 } from 'recharts'
 
 export default function App() {
-  // Authentication State (Local session, ready to plug into Supabase auth)
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('esports_auth_session') === 'true'
-  })
-  const [authEmail, setAuthEmail] = useState('admin@sistema.com')
-  const [authPassword, setAuthPassword] = useState('admin123')
+  // Authentication State con Supabase Auth
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
   const [authError, setAuthError] = useState('')
-  const [currentUser, setCurrentUser] = useState(() => {
-    return JSON.parse(localStorage.getItem('esports_user_data') || '{"nombre": "Administrador", "email": "admin@sistema.com", "rol": "Superadmin"}')
-  })
+  const [isAuthLoading, setIsAuthLoading] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
 
-  const handleLogin = (e) => {
+  // Escuchar y restaurar sesión activa de Supabase
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setIsAuthenticated(true)
+        setCurrentUser({
+          id: session.user.id,
+          email: session.user.email,
+          nombre: session.user.user_metadata?.nombre || session.user.email.split('@')[0].toUpperCase(),
+          rol: 'Administrador'
+        })
+      }
+    })
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setIsAuthenticated(true)
+        setCurrentUser({
+          id: session.user.id,
+          email: session.user.email,
+          nombre: session.user.user_metadata?.nombre || session.user.email.split('@')[0].toUpperCase(),
+          rol: 'Administrador'
+        })
+      } else {
+        setIsAuthenticated(false)
+        setCurrentUser(null)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleLogin = async (e) => {
     e.preventDefault()
     setAuthError('')
+    setIsAuthLoading(true)
 
-    // Acceso fácil / validación local inicial (después reemplazable con supabase.auth.signInWithPassword)
-    if (authEmail.trim() && authPassword.trim()) {
-      setIsAuthenticated(true)
-      localStorage.setItem('esports_auth_session', 'true')
-      localStorage.setItem(
-        'esports_user_data',
-        JSON.stringify({
-          nombre: authEmail.split('@')[0].toUpperCase(),
-          email: authEmail,
-          rol: 'Administrador Principal'
-        })
-      )
-      setCurrentUser({
-        nombre: authEmail.split('@')[0].toUpperCase(),
-        email: authEmail,
-        rol: 'Administrador Principal'
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: authEmail.trim(),
+        password: authPassword.trim()
       })
-    } else {
-      setAuthError('Por favor ingresa un email y contraseña válidos.')
+
+      if (error) {
+        setAuthError(error.message === 'Invalid login credentials' 
+          ? 'Credenciales incorrectas. Verifica tu email y contraseña.' 
+          : error.message)
+      } else if (data?.user) {
+        setIsAuthenticated(true)
+        setCurrentUser({
+          id: data.user.id,
+          email: data.user.email,
+          nombre: data.user.user_metadata?.nombre || data.user.email.split('@')[0].toUpperCase(),
+          rol: 'Administrador'
+        })
+      }
+    } catch (err) {
+      setAuthError('Ocurrió un error al intentar iniciar sesión. Inténtalo de nuevo.')
+    } finally {
+      setIsAuthLoading(false)
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
     setIsAuthenticated(false)
-    localStorage.removeItem('esports_auth_session')
+    setCurrentUser(null)
   }
 
   // Navigation
@@ -1034,10 +1071,20 @@ export default function App() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-4 rounded-xl text-sm shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                  disabled={isAuthLoading}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 px-4 rounded-xl text-sm shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <LogIn className="w-4 h-4" />
-                  <span>Ingresar al Sistema</span>
+                  {isAuthLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verificando credenciales...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Ingresar al Sistema</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -1045,9 +1092,9 @@ export default function App() {
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                Acceso Rápido Habilitado
+                Autenticación Segura
               </span>
-              <span className="text-slate-500">Versión 1.0</span>
+              <span className="font-mono text-slate-500">Supabase Auth</span>
             </div>
           </div>
         </div>
