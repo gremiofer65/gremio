@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import initialData from './initialData.json'
+import { supabase } from './lib/supabaseClient'
 import {
   LayoutDashboard,
   BookOpen,
@@ -23,6 +24,8 @@ import {
   Percent,
   Download,
   AlertCircle,
+  Loader2,
+  RefreshCw,
   FileSpreadsheet,
   Wallet,
   Receipt,
@@ -128,6 +131,84 @@ export default function App() {
       ]
     )
   })
+  const [isLoadingDB, setIsLoadingDB] = useState(true)
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  // Carga inicial y sincronización desde Supabase
+  const loadDataFromSupabase = useCallback(async () => {
+    try {
+      setIsSyncing(true)
+      // 1. Cargar Períodos
+      const { data: dbPeriodos } = await supabase
+        .from('periodos')
+        .select('*')
+        .order('nombre', { ascending: true })
+
+      if (dbPeriodos && dbPeriodos.length > 0) {
+        setMeses(dbPeriodos.map((p) => p.nombre.trim()))
+      }
+
+      // 2. Cargar Tablas Maestras
+      const { data: dbMaestros } = await supabase.from('maestros').select('*')
+      if (dbMaestros && dbMaestros.length > 0) {
+        const grouped = {}
+        dbMaestros.forEach((item) => {
+          if (!grouped[item.categoria]) grouped[item.categoria] = []
+          grouped[item.categoria].push(item.nombre)
+        })
+        setMaestros((prev) => ({ ...prev, ...grouped }))
+      }
+
+      // 3. Cargar Movimientos
+      const { data: dbMovimientos } = await supabase
+        .from('movimientos')
+        .select('*')
+        .order('fecha', { ascending: false })
+
+      if (dbMovimientos && dbMovimientos.length > 0) {
+        const mapped = dbMovimientos.map((m) => ({
+          id: m.id,
+          fecha: m.fecha,
+          facturaNro: m.factura_nro || '',
+          rubro: m.rubro,
+          empresaConcepto: m.empresa_concepto,
+          detalle: m.detalle || '',
+          detalleExtenso: m.detalle_extenso || '',
+          realizadoEn: m.realizado_en || '',
+          fechaPago: m.fecha_pago || '',
+          chequeOperacion: m.cheque_operacion || '',
+          mesPeriodo: m.mes_periodo || '',
+          pagosS: Number(m.pagos_s || 0),
+          ingresosS: Number(m.ingresos_s || 0),
+          pagosMed: Number(m.pagos_med || 0),
+          retencionesMed: Number(m.retenciones_med || 0),
+          netoPagadoMed: Number(m.neto_pagado_med || 0),
+          alquilerCpoSalon: Number(m.alquiler_cpo_salon || 0),
+          ventaCantina: Number(m.venta_cantina || 0),
+          usoNatatorio: Number(m.uso_natatorio || 0),
+          alquiConsultorios: Number(m.alqui_consultorios || 0),
+          practicas: Number(m.practicas || 0),
+          consultas: Number(m.consultas || 0),
+          enfermeria: Number(m.enfermeria || 0),
+          odontologia: Number(m.odontologia || 0),
+          otIngresos: Number(m.ot_ingresos || 0),
+          compensaciones: Number(m.compensaciones || 0),
+          total: Number(m.total || 0),
+          observaciones: m.observaciones || ''
+        }))
+        setMovimientos(mapped)
+      }
+    } catch (err) {
+      console.error('Error cargando de Supabase:', err)
+    } finally {
+      setIsLoadingDB(false)
+      setIsSyncing(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadDataFromSupabase()
+  }, [loadDataFromSupabase])
 
   // Period / Year Filter State & Modal
   const [selectedYear, setSelectedYear] = useState('2026') // 'TODOS' | '2025' | '2026' | '2027'...
@@ -161,7 +242,7 @@ export default function App() {
   }, [meses, selectedYear])
 
   // Handler to create new active period
-  const handleCreatePeriod = (e) => {
+  const handleCreatePeriod = async (e) => {
     e.preventDefault()
     const shortYear = newPeriodYear.slice(-2)
     const formattedPeriod = `${newPeriodMonth.toUpperCase()} ${shortYear}`
@@ -178,6 +259,20 @@ export default function App() {
     setSelectedMes(formattedPeriod)
     setSelectedYear(newPeriodYear)
     setIsNewPeriodModalOpen(false)
+
+    // Persistir en Supabase
+    try {
+      await supabase.from('periodos').upsert([
+        {
+          nombre: formattedPeriod,
+          anio: newPeriodYear,
+          mes: newPeriodMonth.toUpperCase(),
+          activo: true
+        }
+      ], { onConflict: 'nombre' })
+    } catch (err) {
+      console.error('Error guardando período en Supabase:', err)
+    }
   }
 
   // Cuenta Corriente specific state
@@ -195,8 +290,8 @@ export default function App() {
   const [editingItem, setEditingItem] = useState(null) // { catalogKey, oldVal, newVal }
   const [catalogSearch, setCatalogSearch] = useState('')
 
-  // Handlers for Tablas Maestras
-  const handleAddItem = (catalogKey) => {
+  // Handlers for Tablas Maestras con Supabase
+  const handleAddItem = async (catalogKey) => {
     const trimmed = newItemName.trim()
     if (!trimmed) return
 
@@ -212,13 +307,22 @@ export default function App() {
       }
     })
     setNewItemName('')
+
+    // Persistir en Supabase
+    try {
+      await supabase.from('maestros').upsert([
+        { categoria: catalogKey, nombre: trimmed, activo: true }
+      ], { onConflict: 'categoria,nombre' })
+    } catch (err) {
+      console.error('Error guardando en maestros en Supabase:', err)
+    }
   }
 
   const handleStartEdit = (catalogKey, item) => {
     setEditingItem({ catalogKey, oldVal: item, newVal: item })
   }
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingItem) return
     const { catalogKey, oldVal, newVal } = editingItem
     const trimmed = newVal.trim()
@@ -250,9 +354,18 @@ export default function App() {
     }
 
     setEditingItem(null)
+
+    // Persistir en Supabase
+    try {
+      await supabase.from('maestros').delete().match({ categoria: catalogKey, nombre: oldVal })
+      await supabase.from('maestros').insert({ categoria: catalogKey, nombre: trimmed, activo: true })
+      await supabase.from('movimientos').update({ empresa_concepto: trimmed }).match({ empresa_concepto: oldVal })
+    } catch (err) {
+      console.error('Error actualizando maestro en Supabase:', err)
+    }
   }
 
-  const handleDeleteItem = (catalogKey, itemToDelete) => {
+  const handleDeleteItem = async (catalogKey, itemToDelete) => {
     if (!window.confirm(`¿Estás seguro de eliminar "${itemToDelete}" del catálogo?`)) return
 
     setMaestros((prev) => {
@@ -262,6 +375,13 @@ export default function App() {
         [catalogKey]: list.filter((x) => x !== itemToDelete)
       }
     })
+
+    // Persistir eliminación en Supabase
+    try {
+      await supabase.from('maestros').delete().match({ categoria: catalogKey, nombre: itemToDelete })
+    } catch (err) {
+      console.error('Error eliminando maestro de Supabase:', err)
+    }
   }
 
   // Search & Filter for Libro Diario
@@ -771,6 +891,7 @@ export default function App() {
       realizadoEn: formData.realizadoEn,
       fechaPago: formData.fechaPago,
       chequeOperacion: formData.chequeOperacion,
+      mesPeriodo: selectedMes,
       pagosS: modalType === 'EGRESO' ? Number(formData.pagosS || 0) : 0,
       pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
       retencionesMed: modalType === 'MEDICO' ? Number(formData.retencionesMed || 0) : 0,
@@ -791,6 +912,45 @@ export default function App() {
 
     setMovimientos([newMov, ...movimientos])
     setIsModalOpen(false)
+
+    // Persistir en Supabase
+    try {
+      supabase.from('movimientos').insert([
+        {
+          fecha: newMov.fecha,
+          factura_nro: newMov.facturaNro || null,
+          rubro: newMov.rubro,
+          empresa_concepto: newMov.empresaConcepto,
+          detalle: newMov.detalle || null,
+          detalle_extenso: newMov.detalleExtenso || null,
+          realizado_en: newMov.realizadoEn || null,
+          fecha_pago: newMov.fechaPago || null,
+          cheque_operacion: newMov.chequeOperacion || null,
+          mes_periodo: newMov.mesPeriodo || null,
+          pagos_s: newMov.pagosS,
+          ingresos_s: newMov.ingresosS || 0,
+          pagos_med: newMov.pagosMed,
+          retenciones_med: newMov.retencionesMed,
+          neto_pagado_med: newMov.netoPagadoMed,
+          alquiler_cpo_salon: newMov.alquilerCpoSalon,
+          venta_cantina: newMov.ventaCantina,
+          uso_natatorio: newMov.usoNatatorio,
+          alqui_consultorios: newMov.alquiConsultorios,
+          practicas: newMov.practicas,
+          consultas: newMov.consultas,
+          enfermeria: newMov.enfermeria,
+          odontologia: newMov.odontologia,
+          ot_ingresos: newMov.otIngresos,
+          compensaciones: newMov.compensaciones,
+          total: newMov.total,
+          observaciones: newMov.observaciones || null
+        }
+      ]).then(({ data, error }) => {
+        if (error) console.error('Error insertando movimiento en Supabase:', error.message)
+      })
+    } catch (err) {
+      console.error('Error enviando movimiento a Supabase:', err)
+    }
   }
 
   const selectedEntityObj = entidadesCC.find((e) => e.nombre === selectedEntity)

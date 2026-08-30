@@ -27,14 +27,14 @@ CREATE TABLE IF NOT EXISTS maestros (
 CREATE TABLE IF NOT EXISTS movimientos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-    factura_nro VARCHAR(100),
+    factura_nro VARCHAR(150),
     rubro VARCHAR(50) NOT NULL, -- 'PROVEEDOR', 'MÉDICO', 'EMPLEADOS', 'IMPUESTO', 'SEGUROS', 'INGRESOS'
     empresa_concepto VARCHAR(255) NOT NULL,
-    detalle VARCHAR(255),
+    detalle TEXT,
     detalle_extenso TEXT,
-    realizado_en VARCHAR(150),
+    realizado_en TEXT,
     fecha_pago DATE,
-    cheque_operacion VARCHAR(150),
+    cheque_operacion TEXT,
     mes_periodo VARCHAR(50),
 
     -- Egresos Generales
