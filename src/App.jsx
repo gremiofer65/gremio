@@ -21,16 +21,12 @@ import {
   CreditCard,
   Users,
   Briefcase,
-  Percent,
-  Download,
   AlertCircle,
   Loader2,
-  RefreshCw,
   FileSpreadsheet,
   Wallet,
   Receipt,
   Scale,
-  ArrowRightLeft,
   Printer,
   ChevronRight,
   ChevronDown,
@@ -38,8 +34,6 @@ import {
   Edit2,
   Trash2,
   Check,
-  FolderPlus,
-  Lock,
   LogIn,
   LogOut,
   ShieldCheck,
@@ -47,7 +41,7 @@ import {
   KeyRound,
   Menu,
   ArrowLeft,
-  MoreVertical
+  FolderPlus
 } from 'lucide-react'
 import {
   BarChart,
@@ -56,7 +50,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -64,6 +57,125 @@ import {
   AreaChart,
   Area
 } from 'recharts'
+
+const MONTH_ORDER = {
+  'ENERO': 1,
+  'FEBRERO': 2,
+  'MARZO': 3,
+  'ABRIL': 4,
+  'MAYO': 5,
+  'JUNIO': 6,
+  'JULIO': 7,
+  'AGOSTO': 8,
+  'SETIEMBRE': 9,
+  'SEPTIEMBRE': 9,
+  'OCTUBRE': 10,
+  'NOVIEMBRE': 11,
+  'DICIEMBRE': 12
+}
+
+const sortPeriodsChronologically = (periodList = []) => {
+  return [...periodList].sort((a, b) => {
+    const partsA = (a || '').trim().split(' ')
+    const partsB = (b || '').trim().split(' ')
+    
+    const monthA = partsA[0]?.toUpperCase() || ''
+    const yearA = parseInt(partsA[partsA.length - 1]?.length === 2 ? `20${partsA[partsA.length - 1]}` : partsA[partsA.length - 1]) || 2026
+
+    const monthB = partsB[0]?.toUpperCase() || ''
+    const yearB = parseInt(partsB[partsB.length - 1]?.length === 2 ? `20${partsB[partsB.length - 1]}` : partsB[partsB.length - 1]) || 2026
+
+    if (yearA !== yearB) return yearA - yearB
+    return (MONTH_ORDER[monthA] || 0) - (MONTH_ORDER[monthB] || 0)
+  })
+}
+
+const sortAlphabetical = (arr = []) => {
+  return [...arr].sort((a, b) => (a || '').localeCompare(b || '', 'es', { sensitivity: 'base' }))
+}
+
+const defaultMaestros = {
+  proveedores: initialData.maestros?.proveedores ? sortAlphabetical(initialData.maestros.proveedores) : [],
+  medicos: initialData.maestros?.medicos ? sortAlphabetical(initialData.maestros.medicos) : [],
+  empleados: initialData.maestros?.empleados ? sortAlphabetical(initialData.maestros.empleados) : [
+    'Administración',
+    'Enfermería',
+    'Mantenimiento',
+    'Secretaría'
+  ],
+  sedes: initialData.maestros?.sedes && initialData.maestros.sedes.length > 0 ? sortAlphabetical(initialData.maestros.sedes) : [
+    'Campo Deportes',
+    'CENS',
+    'Centro Cultural',
+    'CFL',
+    'Consultorios Externos',
+    'Policlinica AMOS',
+    'Sede Social'
+  ],
+  conceptosGastos: [
+    'Asesoramiento',
+    'Comisiones Bancarias',
+    'Equipamiento e Instalaciones',
+    'Gastos Generales',
+    'Gastos Gremiales',
+    'Impuestos y Tasas',
+    'Insumos Médicos y Odontológicos',
+    'Librería e Imprenta',
+    'Limpieza y Desinfección',
+    'Lub. y Combustibles',
+    'Publicidad',
+    'Seguros',
+    'Servicios y Mantenimiento',
+    'Sueldos / Cargas Sociales'
+  ],
+  conceptosHonorarios: [
+    'Hon Ene 26',
+    'Hon Feb 26',
+    'Hon Mar 26',
+    'Hon Abr 26',
+    'Hon May 26',
+    'Hon Jun 26',
+    'Hon Jul 26',
+    'Hon Ago 26',
+    'Hon Set 26',
+    'Hon Oct 26',
+    'Hon Nov 26',
+    'Hon Dic 26',
+    'Hon Ene 25',
+    'Hon Feb 25',
+    'Hon Mar 25',
+    'Hon Abr 25',
+    'Hon May 25',
+    'Hon Jun 25',
+    'Hon Jul 25',
+    'Hon Ago 25',
+    'Hon Set 25',
+    'Hon Oct 25',
+    'Hon Nov 25',
+    'Hon Dic 25'
+  ],
+  ingresosTipos: [
+    'Alquiler Campo de Deportes / Salón',
+    'Alquiler Consultorios',
+    'Billeteras (Locación Consultorios)',
+    'CENS (Centro Nivel Secundario)',
+    'CFL (Centro Formación Laboral)',
+    'Consultas Médicas',
+    'Enfermería',
+    'IAM SEGURO',
+    'La Estrella Seg de Retiro',
+    'Odontología',
+    'Prácticas Médicas',
+    'Uso Natatorio',
+    'Venta Cantina'
+  ],
+  impuestos: initialData.maestros?.impuestos ? sortAlphabetical(initialData.maestros.impuestos) : [
+    'AFIP / ARCA',
+    'ARBA',
+    'Municipalidad de Chivilcoy',
+    'Seguridad e Higiene'
+  ]
+}
 
 export default function App() {
   // Authentication State con Supabase Auth
@@ -132,7 +244,7 @@ export default function App() {
           rol: 'Administrador'
         })
       }
-    } catch (err) {
+    } catch (_err) {
       setAuthError('Ocurrió un error al intentar iniciar sesión. Inténtalo de nuevo.')
     } finally {
       setIsAuthLoading(false)
@@ -146,46 +258,21 @@ export default function App() {
   }
 
   // Navigation
-  const [activeTab, setActiveTab] = useState('cuentacorriente') // 'dashboard' | 'libro' | 'cuentacorriente' | 'medicos' | 'maestros'
+  const [activeTab, setActiveTab] = useState('cuentacorriente') // 'cuentacorriente' | 'libro' | 'dashboard' | 'medicos' | 'maestros'
   const [selectedMes, setSelectedMes] = useState('ENERO 26')
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isMobileCCDetailOpen, setIsMobileCCDetailOpen] = useState(false)
 
-const MONTH_ORDER = {
-  'ENERO': 1,
-  'FEBRERO': 2,
-  'MARZO': 3,
-  'ABRIL': 4,
-  'MAYO': 5,
-  'JUNIO': 6,
-  'JULIO': 7,
-  'AGOSTO': 8,
-  'SETIEMBRE': 9,
-  'SEPTIEMBRE': 9,
-  'OCTUBRE': 10,
-  'NOVIEMBRE': 11,
-  'DICIEMBRE': 12
-}
-
-const sortPeriodsChronologically = (periodList) => {
-  return [...periodList].sort((a, b) => {
-    const partsA = a.trim().split(' ')
-    const partsB = b.trim().split(' ')
-    
-    const monthA = partsA[0]?.toUpperCase() || ''
-    const yearA = parseInt(partsA[partsA.length - 1]?.length === 2 ? `20${partsA[partsA.length - 1]}` : partsA[partsA.length - 1]) || 2026
-
-    const monthB = partsB[0]?.toUpperCase() || ''
-    const yearB = parseInt(partsB[partsB.length - 1]?.length === 2 ? `20${partsB[partsB.length - 1]}` : partsB[partsB.length - 1]) || 2026
-
-    if (yearA !== yearB) return yearA - yearB
-    return (MONTH_ORDER[monthA] || 0) - (MONTH_ORDER[monthB] || 0)
-  })
-}
-
   // Data state
   const [movimientos, setMovimientos] = useState(initialData.movimientos || initialData.movimientosEnero || [])
-  const [maestros, setMaestros] = useState(initialData.maestros || {})
+  const [maestros, setMaestros] = useState(() => {
+    const base = { ...defaultMaestros, ...(initialData.maestros || {}) }
+    const sorted = {}
+    Object.keys(base).forEach((k) => {
+      sorted[k] = Array.isArray(base[k]) ? sortAlphabetical(base[k]) : base[k]
+    })
+    return sorted
+  })
   const [meses, setMeses] = useState(() => {
     const defaultMeses = [
       'ENERO 26',
@@ -201,13 +288,10 @@ const sortPeriodsChronologically = (periodList) => {
     ]
     return sortPeriodsChronologically(initialData.meses || defaultMeses)
   })
-  const [isLoadingDB, setIsLoadingDB] = useState(true)
-  const [isSyncing, setIsSyncing] = useState(false)
 
   // Carga inicial y sincronización desde Supabase
   const loadDataFromSupabase = useCallback(async () => {
     try {
-      setIsSyncing(true)
       // 1. Cargar Períodos y ordenarlos cronológicamente
       const { data: dbPeriodos } = await supabase
         .from('periodos')
@@ -226,7 +310,14 @@ const sortPeriodsChronologically = (periodList) => {
           if (!grouped[item.categoria]) grouped[item.categoria] = []
           grouped[item.categoria].push(item.nombre)
         })
-        setMaestros((prev) => ({ ...prev, ...grouped }))
+        setMaestros((prev) => {
+          const merged = { ...prev }
+          Object.keys(grouped).forEach((cat) => {
+            const combined = Array.from(new Set([...(merged[cat] || []), ...grouped[cat]]))
+            merged[cat] = sortAlphabetical(combined)
+          })
+          return merged
+        })
       }
 
       // 3. Cargar Movimientos
@@ -253,6 +344,9 @@ const sortPeriodsChronologically = (periodList) => {
           pagosMed: Number(m.pagos_med || 0),
           retencionesMed: Number(m.retenciones_med || 0),
           netoPagadoMed: Number(m.neto_pagado_med || 0),
+          ingresosCFL: Number(m.ingresos_cfl || 0),
+          ingresosCENS: Number(m.ingresos_cens || 0),
+          ingresosBilleteras: Number(m.ingresos_billeteras || 0),
           alquilerCpoSalon: Number(m.alquiler_cpo_salon || 0),
           ventaCantina: Number(m.venta_cantina || 0),
           usoNatatorio: Number(m.uso_natatorio || 0),
@@ -270,9 +364,6 @@ const sortPeriodsChronologically = (periodList) => {
       }
     } catch (err) {
       console.error('Error cargando de Supabase:', err)
-    } finally {
-      setIsLoadingDB(false)
-      setIsSyncing(false)
     }
   }, [])
 
@@ -281,7 +372,7 @@ const sortPeriodsChronologically = (periodList) => {
   }, [loadDataFromSupabase])
 
   // Period / Year Filter State & Modal
-  const [selectedYear, setSelectedYear] = useState('2026') // 'TODOS' | '2025' | '2026' | '2027'...
+  const [selectedYear, setSelectedYear] = useState('2026')
   const [isNewPeriodModalOpen, setIsNewPeriodModalOpen] = useState(false)
   const [newPeriodMonth, setNewPeriodMonth] = useState('ENERO')
   const [newPeriodYear, setNewPeriodYear] = useState('2026')
@@ -290,7 +381,7 @@ const sortPeriodsChronologically = (periodList) => {
   const availableYears = useMemo(() => {
     const yearsSet = new Set(['2025', '2026', '2027'])
     meses.forEach((m) => {
-      const parts = m.trim().split(' ')
+      const parts = (m || '').trim().split(' ')
       const yearPart = parts[parts.length - 1]
       if (yearPart) {
         const fullYear = yearPart.length === 2 ? `20${yearPart}` : yearPart
@@ -304,9 +395,9 @@ const sortPeriodsChronologically = (periodList) => {
   const filteredPeriods = useMemo(() => {
     const sorted = sortPeriodsChronologically(meses)
     if (selectedYear === 'TODOS') return sorted
-    const shortYear = selectedYear.slice(-2) // e.g. '26' from '2026'
+    const shortYear = selectedYear.slice(-2)
     return sorted.filter((m) => {
-      const parts = m.trim().split(' ')
+      const parts = (m || '').trim().split(' ')
       const y = parts[parts.length - 1]
       return y === shortYear || y === selectedYear
     })
@@ -350,16 +441,30 @@ const sortPeriodsChronologically = (periodList) => {
   const [selectedEntity, setSelectedEntity] = useState('')
   const [ccFilterType, setCcFilterType] = useState('TODOS') // 'TODOS' | 'PROVEEDORES' | 'MEDICOS' | 'EMPLEADOS'
   const [ccSearchTerm, setCcSearchTerm] = useState('')
-  const [ccPeriodFilter, setCcPeriodFilter] = useState('TODOS') // 'TODOS' | 'ENERO 26' | 'FEBRERO 26'...
-  const [ccYearFilter, setCcYearFilter] = useState('TODOS') // 'TODOS' | '2025' | '2026' | '2027'...
+  const [ccPeriodFilter, setCcPeriodFilter] = useState('TODOS')
+  const [ccYearFilter, setCcYearFilter] = useState('TODOS')
   const [ccStartDate, setCcStartDate] = useState('')
   const [ccEndDate, setCcEndDate] = useState('')
 
   // Tablas Maestras CRUD state
-  const [activeCatalogTab, setActiveCatalogTab] = useState('proveedores') // 'proveedores' | 'medicos' | 'empleados' | 'sedes' | 'impuestos'
+  const [activeCatalogTab, setActiveCatalogTab] = useState('proveedores')
   const [newItemName, setNewItemName] = useState('')
-  const [editingItem, setEditingItem] = useState(null) // { catalogKey, oldVal, newVal }
+  const [editingItem, setEditingItem] = useState(null)
   const [catalogSearch, setCatalogSearch] = useState('')
+  const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+
+  // Catalog tab labels dictionary
+  const catalogLabels = {
+    proveedores: 'Proveedores y Empresas',
+    medicos: 'Médicos y Profesionales',
+    conceptosGastos: 'Conceptos y Gastos',
+    conceptosHonorarios: 'Honorarios Períodos',
+    ingresosTipos: 'Conceptos de Ingresos',
+    empleados: 'Personal y Empleados',
+    sedes: 'Sedes y Ubicaciones',
+    impuestos: 'Impuestos y Organismos'
+  }
 
   // Handlers for Tablas Maestras con Supabase
   const handleAddItem = async (catalogKey) => {
@@ -368,13 +473,13 @@ const sortPeriodsChronologically = (periodList) => {
 
     setMaestros((prev) => {
       const list = prev[catalogKey] || []
-      if (list.includes(trimmed)) {
+      if (list.some((item) => item.toLowerCase() === trimmed.toLowerCase())) {
         alert('Este registro ya existe en el catálogo.')
         return prev
       }
       return {
         ...prev,
-        [catalogKey]: [trimmed, ...list]
+        [catalogKey]: sortAlphabetical([...list, trimmed])
       }
     })
     setNewItemName('')
@@ -389,6 +494,27 @@ const sortPeriodsChronologically = (periodList) => {
     }
   }
 
+  const handleCreateCategory = (e) => {
+    e.preventDefault()
+    const trimmed = newCategoryName.trim()
+    if (!trimmed) return
+    const key = trimmed.replace(/\s+/g, '_')
+    if (maestros[key] || maestros[trimmed]) {
+      alert('Esta tabla o catálogo ya existe.')
+      setActiveCatalogTab(key)
+      setIsNewCategoryModalOpen(false)
+      return
+    }
+
+    setMaestros((prev) => ({
+      ...prev,
+      [key]: []
+    }))
+    setActiveCatalogTab(key)
+    setNewCategoryName('')
+    setIsNewCategoryModalOpen(false)
+  }
+
   const handleStartEdit = (catalogKey, item) => {
     setEditingItem({ catalogKey, oldVal: item, newVal: item })
   }
@@ -401,9 +527,10 @@ const sortPeriodsChronologically = (periodList) => {
 
     setMaestros((prev) => {
       const list = prev[catalogKey] || []
+      const updated = list.map((x) => (x === oldVal ? trimmed : x))
       return {
         ...prev,
-        [catalogKey]: list.map((x) => (x === oldVal ? trimmed : x))
+        [catalogKey]: sortAlphabetical(updated)
       }
     })
 
@@ -462,7 +589,7 @@ const sortPeriodsChronologically = (periodList) => {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [modalType, setModalType] = useState('EGRESO') // 'EGRESO' | 'MEDICO' | 'INGRESO' | 'ASIENTO_CC'
+  const [modalType, setModalType] = useState('EGRESO') // 'EGRESO' | 'MEDICO' | 'INGRESO'
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [entitySearchFilter, setEntitySearchFilter] = useState('')
   
@@ -485,20 +612,20 @@ const sortPeriodsChronologically = (periodList) => {
     porcentajeRetencion: 5,
     retencionesMed: '',
     netoPagadoMed: '',
-    // Cuenta Corriente Direct Entry
-    tipoMovimientoCC: 'DEBITO', // DEBITO (Factura/Deuda) o CREDITO (Pago/Cobro)
-    montoCC: '',
-    // Ingresos
-    alquilerCpoSalon: 0,
-    ventaCantina: 0,
-    usoNatatorio: 0,
-    alquiConsultorios: 0,
-    practicas: 0,
-    consultas: 0,
-    enfermeria: 0,
-    odontologia: 0,
-    otIngresos: 0,
-    compensaciones: 0,
+    // Ingresos Detallados
+    ingresosCFL: '',
+    ingresosCENS: '',
+    ingresosBilleteras: '',
+    alquiConsultorios: '',
+    alquilerCpoSalon: '',
+    ventaCantina: '',
+    usoNatatorio: '',
+    practicas: '',
+    consultas: '',
+    enfermeria: '',
+    odontologia: '',
+    otIngresos: '',
+    compensaciones: '',
     observaciones: ''
   })
 
@@ -522,7 +649,6 @@ const sortPeriodsChronologically = (periodList) => {
     let totalRetencionesMed = 0
     let totalNetoMed = 0
 
-    // Filter movements by active selectedMes for Libro Diario / Dashboard
     const periodMovs = selectedMes
       ? movimientos.filter((m) => (m.mesPeriodo ? m.mesPeriodo.trim() === selectedMes.trim() : true))
       : movimientos
@@ -537,17 +663,21 @@ const sortPeriodsChronologically = (periodList) => {
       } else if (m.rubro === 'INGRESOS') {
         const rowIngreso = Number(
           m.total || (
-          Number(m.alquilerCpoSalon || 0) +
-          Number(m.ventaCantina || 0) +
-          Number(m.usoNatatorio || 0) +
-          Number(m.alquiConsultorios || 0) +
-          Number(m.practicas || 0) +
-          Number(m.consultas || 0) +
-          Number(m.enfermeria || 0) +
-          Number(m.odontologia || 0) +
-          Number(m.otIngresos || 0) +
-          Number(m.compensaciones || 0)
-        ))
+            Number(m.ingresosCFL || 0) +
+            Number(m.ingresosCENS || 0) +
+            Number(m.ingresosBilleteras || 0) +
+            Number(m.alquiConsultorios || 0) +
+            Number(m.alquilerCpoSalon || 0) +
+            Number(m.ventaCantina || 0) +
+            Number(m.usoNatatorio || 0) +
+            Number(m.practicas || 0) +
+            Number(m.consultas || 0) +
+            Number(m.enfermeria || 0) +
+            Number(m.odontologia || 0) +
+            Number(m.otIngresos || 0) +
+            Number(m.compensaciones || 0)
+          )
+        )
         totalIngresos += rowIngreso
       }
     })
@@ -570,7 +700,6 @@ const sortPeriodsChronologically = (periodList) => {
   // Filtered movements for Libro Diario
   const filteredMovimientos = useMemo(() => {
     return movimientos.filter((m) => {
-      // Period filter
       if (selectedMes && m.mesPeriodo && m.mesPeriodo.trim() !== selectedMes.trim()) {
         return false
       }
@@ -591,26 +720,20 @@ const sortPeriodsChronologically = (periodList) => {
   }, [movimientos, selectedMes, searchTerm, selectedRubro, selectedSede])
 
   // ================= CUENTA CORRIENTE ENGINE =================
-  // Extract all distinct entities with their type and current balance
   const entidadesCC = useMemo(() => {
     const map = {}
 
-    // Init from maestros
-    maestros.proveedores?.forEach((p) => {
+    // Init from maestros (sorted alphabetically)
+    sortAlphabetical(maestros.proveedores || []).forEach((p) => {
       map[p] = { nombre: p, tipo: 'PROVEEDOR', totalDebito: 0, totalCredito: 0, movimientosCount: 0 }
     })
-    maestros.medicos?.forEach((m) => {
+    sortAlphabetical(maestros.medicos || []).forEach((m) => {
       map[m] = { nombre: m, tipo: 'MÉDICO', totalDebito: 0, totalCredito: 0, movimientosCount: 0 }
     })
-    maestros.empleados?.forEach((e) => {
+    sortAlphabetical(maestros.empleados || []).forEach((e) => {
       map[e] = { nombre: e, tipo: 'EMPLEADOS', totalDebito: 0, totalCredito: 0, movimientosCount: 0 }
     })
 
-    // Process all movements to build balances
-    // En cuenta de Proveedores/Médicos:
-    // DÉBITO = Factura devengada / Honorario generado (Lo que se le debe / pasivo)
-    // CRÉDITO = Pago realizado / Transferencia / Cheque (Cancelación de deuda)
-    // SALDO = Débito - Crédito (Saldo > 0 significa deuda pendiente; Saldo = 0 cancelado)
     movimientos.forEach((m) => {
       const entName = m.empresaConcepto
       if (!entName) return
@@ -628,19 +751,15 @@ const sortPeriodsChronologically = (periodList) => {
       map[entName].movimientosCount += 1
 
       if (m.rubro === 'MÉDICO') {
-        // Débito = Honorario Neto devengado
         const debito = Number(m.netoPagadoMed || m.pagosMed || 0)
-        // Crédito = Pago emitido (si tiene fecha de pago se considera cancelado)
         const credito = m.fechaPago ? debito : 0
         map[entName].totalDebito += debito
         map[entName].totalCredito += credito
       } else if (m.rubro === 'INGRESOS') {
-        // En cuenta de Ingresos/Clientes: Débito = Importe Facturado/Cobrado
         const monto = Number(m.total || 0)
         map[entName].totalDebito += monto
         map[entName].totalCredito += m.fechaPago ? monto : 0
       } else {
-        // Proveedor / Empleado / Impuesto
         const monto = Number(m.pagosS || 0)
         const debito = monto
         const credito = m.fechaPago ? monto : 0
@@ -649,13 +768,15 @@ const sortPeriodsChronologically = (periodList) => {
       }
     })
 
-    return Object.values(map).map((ent) => ({
-      ...ent,
-      saldo: ent.totalDebito - ent.totalCredito
-    }))
+    return Object.values(map)
+      .map((ent) => ({
+        ...ent,
+        saldo: ent.totalDebito - ent.totalCredito
+      }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
   }, [movimientos, maestros])
 
-  // Filtered entities list
+  // Filtered entities list with strict alphabetical order
   const filteredEntidades = useMemo(() => {
     return entidadesCC.filter((e) => {
       const matchType =
@@ -672,15 +793,14 @@ const sortPeriodsChronologically = (periodList) => {
   }, [entidadesCC, ccFilterType, ccSearchTerm])
 
   // Set default selected entity if empty
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedEntity && filteredEntidades.length > 0) {
-      // Pick first active entity with movements
       const withMovs = filteredEntidades.find((e) => e.movimientosCount > 0) || filteredEntidades[0]
       setSelectedEntity(withMovs.nombre)
     }
   }, [filteredEntidades, selectedEntity])
 
-  // Extract ledger movements with running balance for the selected entity with Period and Year filter
+  // Extract ledger movements with running balance for the selected entity
   const extractoCuenta = useMemo(() => {
     if (!selectedEntity) return { movimientos: [], totalDebito: 0, totalCredito: 0, saldoFinal: 0 }
 
@@ -688,23 +808,19 @@ const sortPeriodsChronologically = (periodList) => {
       .filter((m) => {
         if (m.empresaConcepto !== selectedEntity) return false
 
-        // Period filter check (e.g. 'ENERO 26' matches m.mesPeriodo)
         if (ccPeriodFilter !== 'TODOS') {
           if (m.mesPeriodo && m.mesPeriodo.trim() !== ccPeriodFilter.trim()) {
             return false
           }
         }
 
-        // Year filter check (if period is TODOS, can filter by year)
         if (ccYearFilter !== 'TODOS') {
-          // Check if mesPeriodo ends with year suffix or fecha year matches
-          const yearSuffix = ccYearFilter.slice(-2) // '26'
+          const yearSuffix = ccYearFilter.slice(-2)
           const matchesPeriodYear = m.mesPeriodo && m.mesPeriodo.includes(yearSuffix)
           const matchesDateYear = m.fecha && m.fecha.startsWith(ccYearFilter)
           if (!matchesPeriodYear && !matchesDateYear) return false
         }
 
-        // Date range filter check (Desde / Hasta)
         if (ccStartDate && m.fecha && m.fecha < ccStartDate) return false
         if (ccEndDate && m.fecha && m.fecha > ccEndDate) return false
 
@@ -726,7 +842,6 @@ const sortPeriodsChronologically = (periodList) => {
 
       if (m.rubro === 'MÉDICO') {
         debito = Number(m.netoPagadoMed || m.pagosMed || 0)
-        // 1. Asiento de devengamiento (Débito)
         runningBalance += debito
         sumDebito += debito
         rows.push({
@@ -741,7 +856,6 @@ const sortPeriodsChronologically = (periodList) => {
           saldo: runningBalance
         })
 
-        // 2. Asiento de Pago (Crédito) si fue pagado
         if (m.fechaPago) {
           credito = debito
           runningBalance -= credito
@@ -775,7 +889,6 @@ const sortPeriodsChronologically = (periodList) => {
           saldo: runningBalance
         })
       } else {
-        // Proveedor / Empleado / Impuesto
         const monto = Number(m.pagosS || 0)
         debito = monto
         runningBalance += debito
@@ -819,7 +932,7 @@ const sortPeriodsChronologically = (periodList) => {
     }
   }, [selectedEntity, movimientos, ccPeriodFilter, ccYearFilter, ccStartDate, ccEndDate])
 
-  // Helper to export Cuenta Corriente Ledger to Excel (CSV format formatted for Excel)
+  // Helper to export Cuenta Corriente Ledger to CSV/Excel
   const handleExportCCExcel = () => {
     if (!selectedEntity || extractoCuenta.movimientos.length === 0) {
       alert('No hay movimientos para exportar en este período o rango seleccionado.')
@@ -838,7 +951,6 @@ const sortPeriodsChronologically = (periodList) => {
       r.saldo ? r.saldo.toFixed(2) : '0.00'
     ])
 
-    // Summary line
     rows.push([])
     rows.push(['"TOTALES"', '""', '""', '""', '""', extractoCuenta.totalDebito.toFixed(2), extractoCuenta.totalCredito.toFixed(2), extractoCuenta.saldoFinal.toFixed(2)])
 
@@ -855,7 +967,7 @@ const sortPeriodsChronologically = (periodList) => {
     document.body.removeChild(link)
   }
 
-  // Medical Liquidation Summary (Filtered by active selectedMes)
+  // Medical Liquidation Summary
   const medicosData = useMemo(() => {
     return movimientos.filter((m) => {
       if (m.rubro !== 'MÉDICO') return false
@@ -864,7 +976,7 @@ const sortPeriodsChronologically = (periodList) => {
     })
   }, [movimientos, selectedMes])
 
-  // Chart Data: Egresos by Rubro (Filtered by active selectedMes)
+  // Chart Data: Egresos by Rubro
   const egresosPorRubroData = useMemo(() => {
     const rubrosMap = {}
     const periodMovs = selectedMes
@@ -883,7 +995,7 @@ const sortPeriodsChronologically = (periodList) => {
     }))
   }, [movimientos, selectedMes])
 
-  // Chart Data 2: Evolución Mensual de Ingresos vs Egresos (Comparativa Multi-período)
+  // Chart Data 2: Evolución Mensual
   const evolucionMensualData = useMemo(() => {
     const periodosList = meses.slice().reverse()
     return periodosList.map((p) => {
@@ -895,10 +1007,13 @@ const sortPeriodsChronologically = (periodList) => {
         if (m.rubro === 'INGRESOS') {
           ing += Number(
             m.total || (
+              Number(m.ingresosCFL || 0) +
+              Number(m.ingresosCENS || 0) +
+              Number(m.ingresosBilleteras || 0) +
+              Number(m.alquiConsultorios || 0) +
               Number(m.alquilerCpoSalon || 0) +
               Number(m.ventaCantina || 0) +
               Number(m.usoNatatorio || 0) +
-              Number(m.alquiConsultorios || 0) +
               Number(m.practicas || 0) +
               Number(m.consultas || 0) +
               Number(m.enfermeria || 0) +
@@ -923,24 +1038,24 @@ const sortPeriodsChronologically = (periodList) => {
 
   // Chart Data 3: Distribución del Gasto por Sede
   const gastosPorSedeData = useMemo(() => {
-    const sedeMap = {}
+    const昆sedeMap = {}
     const periodMovs = selectedMes
       ? movimientos.filter((m) => (m.mesPeriodo ? m.mesPeriodo.trim() === selectedMes.trim() : true))
       : movimientos
 
     periodMovs.forEach((m) => {
       if (m.rubro === 'INGRESOS') return
-      const s = m.realizadoEn || 'Sede Central / Gral'
+      const s = m.realizadoEn || 'Policlinica AMOS'
       const amount = Number(m.pagosS || 0) + Number(m.netoPagadoMed || 0)
-      sedeMap[s] = (sedeMap[s] || 0) + amount
+      昆sedeMap[s] = (昆sedeMap[s] || 0) + amount
     })
 
-    return Object.keys(sedeMap)
-      .map((k) => ({ name: k, total: sedeMap[k] }))
+    return Object.keys(昆sedeMap)
+      .map((k) => ({ name: k, total: 昆sedeMap[k] }))
       .sort((a, b) => b.total - a.total)
   }, [movimientos, selectedMes])
 
-  // Chart Data 4: Top 5 Proveedores / Médicos con Mayor Gasto del Período
+  // Chart Data 4: Top 5 Entidades con Mayor Gasto
   const topEntidadesGasto = useMemo(() => {
     const entMap = {}
     const periodMovs = selectedMes
@@ -1018,10 +1133,13 @@ const sortPeriodsChronologically = (periodList) => {
     let totalIngresosCalculado = 0
     if (modalType === 'INGRESO') {
       totalIngresosCalculado =
+        Number(formData.ingresosCFL || 0) +
+        Number(formData.ingresosCENS || 0) +
+        Number(formData.ingresosBilleteras || 0) +
+        Number(formData.alquiConsultorios || 0) +
         Number(formData.alquilerCpoSalon || 0) +
         Number(formData.ventaCantina || 0) +
         Number(formData.usoNatatorio || 0) +
-        Number(formData.alquiConsultorios || 0) +
         Number(formData.practicas || 0) +
         Number(formData.consultas || 0) +
         Number(formData.enfermeria || 0) +
@@ -1035,10 +1153,10 @@ const sortPeriodsChronologically = (periodList) => {
       fecha: formData.fecha,
       facturaNro: formData.facturaNro,
       rubro: modalType === 'MEDICO' ? 'MÉDICO' : modalType === 'INGRESO' ? 'INGRESOS' : formData.rubro,
-      empresaConcepto: formData.empresaConcepto,
+      empresaConcepto: formData.empresaConcepto || (modalType === 'INGRESO' ? 'Ingresos Varios' : ''),
       detalle: formData.detalle,
       detalleExtenso: formData.detalleExtenso,
-      realizadoEn: formData.realizadoEn,
+      realizadoEn: formData.realizadoEn || 'Policlinica AMOS',
       fechaPago: formData.fechaPago,
       chequeOperacion: formData.chequeOperacion,
       mesPeriodo: selectedMes,
@@ -1046,10 +1164,13 @@ const sortPeriodsChronologically = (periodList) => {
       pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
       retencionesMed: modalType === 'MEDICO' ? Number(formData.retencionesMed || 0) : 0,
       netoPagadoMed: modalType === 'MEDICO' ? Number(formData.netoPagadoMed || 0) : 0,
+      ingresosCFL: Number(formData.ingresosCFL || 0),
+      ingresosCENS: Number(formData.ingresosCENS || 0),
+      ingresosBilleteras: Number(formData.ingresosBilleteras || 0),
+      alquiConsultorios: Number(formData.alquiConsultorios || 0),
       alquilerCpoSalon: Number(formData.alquilerCpoSalon || 0),
       ventaCantina: Number(formData.ventaCantina || 0),
       usoNatatorio: Number(formData.usoNatatorio || 0),
-      alquiConsultorios: Number(formData.alquiConsultorios || 0),
       practicas: Number(formData.practicas || 0),
       consultas: Number(formData.consultas || 0),
       enfermeria: Number(formData.enfermeria || 0),
@@ -1095,7 +1216,7 @@ const sortPeriodsChronologically = (periodList) => {
           total: newMov.total,
           observaciones: newMov.observaciones || null
         }
-      ]).then(({ data, error }) => {
+      ]).then(({ error }) => {
         if (error) console.error('Error insertando movimiento en Supabase:', error.message)
       })
     } catch (err) {
@@ -1108,12 +1229,10 @@ const sortPeriodsChronologically = (periodList) => {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans">
-        {/* Decorative background glows */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/3 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="w-full max-w-md relative z-10">
-          {/* Brand Header */}
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 mx-auto flex items-center justify-center shadow-xl shadow-blue-600/30 mb-4 border border-blue-400/30">
               <ShieldCheck className="w-8 h-8 text-white" />
@@ -1122,7 +1241,6 @@ const sortPeriodsChronologically = (periodList) => {
             <p className="text-sm text-slate-400 mt-1">Acceso Administrativo y Contabilidad</p>
           </div>
 
-          {/* Login Card */}
           <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div>
@@ -1243,7 +1361,6 @@ const sortPeriodsChronologically = (periodList) => {
                 <p className="text-xs text-slate-400">Contabilidad & Finanzas</p>
               </div>
             </div>
-            {/* Close button for mobile */}
             <button
               onClick={() => setIsMobileSidebarOpen(false)}
               className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
@@ -1254,7 +1371,6 @@ const sortPeriodsChronologically = (periodList) => {
 
           {/* Period & Year Selector */}
           <div className="p-4 space-y-2.5 border-b border-slate-800/80 bg-slate-950/40">
-            {/* Year Filter + New Period Button */}
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Año / Ejercicio
@@ -1273,7 +1389,6 @@ const sortPeriodsChronologically = (periodList) => {
               </button>
             </div>
 
-            {/* Year Filter Select */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <select
@@ -1290,7 +1405,6 @@ const sortPeriodsChronologically = (periodList) => {
                 </select>
               </div>
 
-              {/* Month / Period Select */}
               <div>
                 <select
                   value={selectedMes}
@@ -1319,7 +1433,7 @@ const sortPeriodsChronologically = (periodList) => {
                 setIsMobileSidebarOpen(false)
                 setIsMobileCCDetailOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'cuentacorriente'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -1327,9 +1441,6 @@ const sortPeriodsChronologically = (periodList) => {
             >
               <Wallet className="w-4 h-4 text-emerald-400" />
               <span>Cuenta Corriente</span>
-              <span className="ml-auto text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded font-mono">
-                PRO
-              </span>
             </button>
 
             <button
@@ -1337,7 +1448,7 @@ const sortPeriodsChronologically = (periodList) => {
                 setActiveTab('libro')
                 setIsMobileSidebarOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'libro'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -1352,7 +1463,7 @@ const sortPeriodsChronologically = (periodList) => {
                 setActiveTab('dashboard')
                 setIsMobileSidebarOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'dashboard'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -1367,7 +1478,7 @@ const sortPeriodsChronologically = (periodList) => {
                 setActiveTab('medicos')
                 setIsMobileSidebarOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'medicos'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -1382,7 +1493,7 @@ const sortPeriodsChronologically = (periodList) => {
                 setActiveTab('maestros')
                 setIsMobileSidebarOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'maestros'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -1399,11 +1510,11 @@ const sortPeriodsChronologically = (periodList) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs">
-                {currentUser.nombre ? currentUser.nombre.charAt(0) : 'A'}
+                {currentUser?.nombre ? currentUser.nombre.charAt(0) : 'A'}
               </div>
               <div className="overflow-hidden">
-                <p className="text-xs font-bold text-white truncate">{currentUser.nombre}</p>
-                <p className="text-[10px] text-slate-400 truncate">{currentUser.email}</p>
+                <p className="text-xs font-bold text-white truncate">{currentUser?.nombre}</p>
+                <p className="text-[10px] text-slate-400 truncate">{currentUser?.email}</p>
               </div>
             </div>
 
@@ -1428,7 +1539,6 @@ const sortPeriodsChronologically = (periodList) => {
         {/* TOP NAVBAR */}
         <header className="min-h-16 py-2.5 md:py-0 border-b border-slate-800 px-3 md:px-6 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/80 backdrop-blur-md shrink-0 z-30">
           <div className="flex items-center gap-2.5 md:gap-4 min-w-0">
-            {/* Mobile Sidebar Hamburger Toggle */}
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
@@ -1458,7 +1568,7 @@ const sortPeriodsChronologically = (periodList) => {
                 setModalType('EGRESO')
                 setIsModalOpen(true)
               }}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
               title="Cargar Gasto / Pago"
             >
               <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
@@ -1470,7 +1580,7 @@ const sortPeriodsChronologically = (periodList) => {
                 setModalType('MEDICO')
                 setIsModalOpen(true)
               }}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
               title="Cargar Honorario Médico"
             >
               <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
@@ -1482,7 +1592,7 @@ const sortPeriodsChronologically = (periodList) => {
                 setModalType('INGRESO')
                 setIsModalOpen(true)
               }}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition cursor-pointer"
               title="Nuevo Ingreso"
             >
               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -1493,7 +1603,7 @@ const sortPeriodsChronologically = (periodList) => {
 
         {/* VIEW CONTAINER */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4 md:space-y-6">
-          {/* TAB: CUENTA CORRIENTE PROFESIONAL */}
+          {/* TAB 1: CUENTA CORRIENTE */}
           {activeTab === 'cuentacorriente' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 min-h-[calc(100vh-140px)]">
               {/* LEFT COLUMN: ENTITIES SELECTOR */}
@@ -1519,7 +1629,7 @@ const sortPeriodsChronologically = (periodList) => {
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder="Buscar por nombre..."
+                      placeholder="Buscar cuenta por nombre..."
                       value={ccSearchTerm}
                       onChange={(e) => setCcSearchTerm(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -1530,7 +1640,7 @@ const sortPeriodsChronologically = (periodList) => {
                   <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950 rounded-lg text-[11px] font-semibold text-slate-400">
                     <button
                       onClick={() => setCcFilterType('TODOS')}
-                      className={`py-1 rounded ${
+                      className={`py-1 rounded cursor-pointer transition ${
                         ccFilterType === 'TODOS' ? 'bg-blue-600 text-white' : 'hover:text-white'
                       }`}
                     >
@@ -1538,7 +1648,7 @@ const sortPeriodsChronologically = (periodList) => {
                     </button>
                     <button
                       onClick={() => setCcFilterType('MEDICOS')}
-                      className={`py-1 rounded ${
+                      className={`py-1 rounded cursor-pointer transition ${
                         ccFilterType === 'MEDICOS' ? 'bg-blue-600 text-white' : 'hover:text-white'
                       }`}
                     >
@@ -1546,7 +1656,7 @@ const sortPeriodsChronologically = (periodList) => {
                     </button>
                     <button
                       onClick={() => setCcFilterType('PROVEEDORES')}
-                      className={`py-1 rounded ${
+                      className={`py-1 rounded cursor-pointer transition ${
                         ccFilterType === 'PROVEEDORES' ? 'bg-blue-600 text-white' : 'hover:text-white'
                       }`}
                     >
@@ -1554,7 +1664,7 @@ const sortPeriodsChronologically = (periodList) => {
                     </button>
                     <button
                       onClick={() => setCcFilterType('EMPLEADOS')}
-                      className={`py-1 rounded ${
+                      className={`py-1 rounded cursor-pointer transition ${
                         ccFilterType === 'EMPLEADOS' ? 'bg-blue-600 text-white' : 'hover:text-white'
                       }`}
                     >
@@ -1623,7 +1733,7 @@ const sortPeriodsChronologically = (periodList) => {
                 </div>
               </div>
 
-              {/* RIGHT COLUMN: EXTRACTO BANCARIO / LIBRO MAYOR (DEBITO, CREDITO, SALDO) */}
+              {/* RIGHT COLUMN: EXTRACTO BANCARIO / LIBRO MAYOR */}
               <div
                 className={`lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl ${
                   !isMobileCCDetailOpen ? 'hidden lg:flex' : 'flex'
@@ -1634,7 +1744,6 @@ const sortPeriodsChronologically = (periodList) => {
                   <>
                     <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        {/* Mobile Back Button */}
                         <button
                           type="button"
                           onClick={() => setIsMobileCCDetailOpen(false)}
@@ -1660,9 +1769,8 @@ const sortPeriodsChronologically = (periodList) => {
                         </div>
                       </div>
 
-                      {/* Resumen Cards (Débito, Crédito, Saldo) */}
+                      {/* Resumen Cards */}
                       <div className="grid grid-cols-3 sm:flex items-center gap-2 sm:gap-3 font-mono">
-                        {/* Total Débito */}
                         <div className="bg-slate-900 border border-slate-800 p-2 sm:px-3 sm:py-2 rounded-xl text-center sm:text-right">
                           <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-sans font-bold block truncate">
                             Débito
@@ -1672,7 +1780,6 @@ const sortPeriodsChronologically = (periodList) => {
                           </span>
                         </div>
 
-                        {/* Total Crédito */}
                         <div className="bg-slate-900 border border-slate-800 p-2 sm:px-3 sm:py-2 rounded-xl text-center sm:text-right">
                           <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-sans font-bold block truncate">
                             Crédito
@@ -1682,7 +1789,6 @@ const sortPeriodsChronologically = (periodList) => {
                           </span>
                         </div>
 
-                        {/* Saldo Actual */}
                         <div className="bg-slate-900 border border-slate-800 p-2 sm:px-4 sm:py-2 rounded-xl text-center sm:text-right ring-1 ring-blue-500/30">
                           <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-sans font-bold block truncate">
                             Saldo
@@ -1700,7 +1806,7 @@ const sortPeriodsChronologically = (periodList) => {
                       </div>
                     </div>
 
-                    {/* Filter Toolbar specifically for the Ledger: Filter by Year, Month and Quick Excel Export */}
+                    {/* Filter Toolbar */}
                     <div className="px-3.5 sm:px-5 py-3 border-b border-slate-800 bg-slate-950/40 flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         <span className="font-semibold text-slate-400 flex items-center gap-1.5 text-xs">
@@ -1708,7 +1814,6 @@ const sortPeriodsChronologically = (periodList) => {
                           Filtros:
                         </span>
 
-                        {/* Year Filter */}
                         <div className="flex items-center gap-1">
                           <span className="text-slate-500 text-[11px]">Año:</span>
                           <select
@@ -1725,7 +1830,6 @@ const sortPeriodsChronologically = (periodList) => {
                           </select>
                         </div>
 
-                        {/* Month / Period Filter */}
                         <div className="flex items-center gap-1">
                           <span className="text-slate-500 text-[11px]">Período:</span>
                           <select
@@ -1746,7 +1850,6 @@ const sortPeriodsChronologically = (periodList) => {
                           </select>
                         </div>
 
-                        {/* Rango de Fechas Exacto (Desde / Hasta) */}
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-slate-500 text-[11px]">Desde:</span>
                           <input
@@ -1785,7 +1888,6 @@ const sortPeriodsChronologically = (periodList) => {
                         )}
                       </div>
 
-                      {/* Export Buttons */}
                       <div className="flex items-center gap-2 ml-auto sm:ml-0">
                         <button
                           type="button"
@@ -1810,7 +1912,7 @@ const sortPeriodsChronologically = (periodList) => {
                     </div>
                   </>
                 ) : (
-                  <div className="p-6 text-center text-slate-400">Seleccione una entidad</div>
+                  <div className="p-6 text-center text-slate-400">Seleccione una cuenta para ver su extracto.</div>
                 )}
 
                 {/* Table of Ledger Entries */}
@@ -1842,15 +1944,10 @@ const sortPeriodsChronologically = (periodList) => {
 
                           return (
                             <tr key={row.id} className="hover:bg-slate-800/40 transition">
-                              {/* Fecha */}
                               <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{row.fecha}</td>
-
-                              {/* Comprobante */}
                               <td className="py-3 px-3 font-mono text-slate-300 font-semibold whitespace-nowrap">
                                 {row.comprobante}
                               </td>
-
-                              {/* Tipo */}
                               <td className="py-3 px-3 whitespace-nowrap">
                                 <span
                                   className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
@@ -1862,26 +1959,18 @@ const sortPeriodsChronologically = (periodList) => {
                                   {row.tipoComprobante}
                                 </span>
                               </td>
-
-                              {/* Detalle */}
                               <td className="py-3 px-4 text-slate-300 max-w-[240px] truncate">
                                 <div>{row.detalle}</div>
                                 {row.referencia && (
                                   <span className="text-[10px] text-slate-500">{row.referencia}</span>
                                 )}
                               </td>
-
-                              {/* Débito */}
                               <td className="py-3 px-3 text-right font-mono font-semibold text-rose-400 whitespace-nowrap">
                                 {isDebito ? fmtMoney(row.debito) : '-'}
                               </td>
-
-                              {/* Crédito */}
                               <td className="py-3 px-3 text-right font-mono font-semibold text-emerald-400 whitespace-nowrap">
                                 {isCredito ? fmtMoney(row.credito) : '-'}
                               </td>
-
-                              {/* Saldo Acumulado */}
                               <td className="py-3 px-4 text-right font-mono font-bold text-white whitespace-nowrap bg-slate-950/30">
                                 {fmtMoney(row.saldo)}
                               </td>
@@ -1893,17 +1982,15 @@ const sortPeriodsChronologically = (periodList) => {
                   </table>
                 </div>
 
-                {/* Footer Actions */}
                 <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950 flex flex-wrap justify-between items-center gap-2 text-xs">
                   <div className="flex items-center gap-2 text-slate-400 text-[11px] sm:text-xs">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>Partida doble contable aplicada</span>
                   </div>
-
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => window.print()}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
                     >
                       <Printer className="w-3.5 h-3.5 text-slate-400" />
                       Imprimir
@@ -1919,7 +2006,6 @@ const sortPeriodsChronologically = (periodList) => {
             <div className="space-y-4">
               {/* STATS STRIP */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-                {/* Total Ingresos */}
                 <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start">
                     <div className="min-w-0">
@@ -1930,10 +2016,9 @@ const sortPeriodsChronologically = (periodList) => {
                       <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                   </div>
-                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 truncate">Policlínica y Otros</p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 truncate">Policlínica, CFL, CENS y Otros</p>
                 </div>
 
-                {/* Total Egresos */}
                 <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start">
                     <div className="min-w-0">
@@ -1947,7 +2032,6 @@ const sortPeriodsChronologically = (periodList) => {
                   <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 truncate">Proveed. y Sueldos</p>
                 </div>
 
-                {/* Total Honorarios Médicos */}
                 <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start">
                     <div className="min-w-0">
@@ -1961,7 +2045,6 @@ const sortPeriodsChronologically = (periodList) => {
                   <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1.5 sm:mt-2 truncate">Ret: {fmtMoney(stats.totalRetencionesMed)}</p>
                 </div>
 
-                {/* Saldo Neto */}
                 <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
                   <div className="flex justify-between items-start">
                     <div className="min-w-0">
@@ -1989,7 +2072,7 @@ const sortPeriodsChronologically = (periodList) => {
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 sm:top-3 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder="Buscar por médico, proveedor, factura o cheque..."
+                      placeholder="Buscar por médico, proveedor, factura o detalle..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -1998,32 +2081,31 @@ const sortPeriodsChronologically = (periodList) => {
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                  {/* Filtro Rubro */}
                   <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
                     <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <select
                       value={selectedRubro}
                       onChange={(e) => setSelectedRubro(e.target.value)}
-                      className="w-full sm:w-auto bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 focus:outline-none focus:border-blue-500 font-medium"
+                      className="w-full sm:w-auto bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                     >
-                      <option value="TODOS">Rubros</option>
-                      {maestros.rubros?.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
+                      <option value="TODOS">Todos los Rubros</option>
+                      <option value="PROVEEDOR">PROVEEDOR</option>
+                      <option value="MÉDICO">MÉDICO</option>
+                      <option value="INGRESOS">INGRESOS</option>
+                      <option value="EMPLEADOS">EMPLEADOS</option>
+                      <option value="IMPUESTO">IMPUESTO</option>
+                      <option value="SEGUROS">SEGUROS</option>
                     </select>
                   </div>
 
-                  {/* Filtro Sede */}
                   <div className="flex-1 sm:flex-initial">
                     <select
                       value={selectedSede}
                       onChange={(e) => setSelectedSede(e.target.value)}
-                      className="w-full sm:w-auto bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 focus:outline-none focus:border-blue-500 font-medium"
+                      className="w-full sm:w-auto bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                     >
-                      <option value="TODAS">Sedes</option>
-                      {maestros.sedes?.map((s) => (
+                      <option value="TODAS">Todas las Sedes</option>
+                      {(maestros.sedes || []).map((s) => (
                         <option key={s} value={s}>
                           {s}
                         </option>
@@ -2070,15 +2152,10 @@ const sortPeriodsChronologically = (periodList) => {
                               key={m.id || idx}
                               className="hover:bg-slate-800/40 transition group"
                             >
-                              {/* Fecha */}
                               <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">{m.fecha}</td>
-
-                              {/* Factura */}
                               <td className="py-2.5 px-3 font-mono text-slate-400 whitespace-nowrap">
                                 {m.facturaNro || '-'}
                               </td>
-
-                              {/* Rubro Tag */}
                               <td className="py-2.5 px-3 whitespace-nowrap">
                                 <span
                                   className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
@@ -2096,13 +2173,9 @@ const sortPeriodsChronologically = (periodList) => {
                                   {m.rubro}
                                 </span>
                               </td>
-
-                              {/* Empresa / Concepto */}
                               <td className="py-2.5 px-3 text-slate-200 font-semibold max-w-[200px] truncate">
                                 {m.empresaConcepto}
                               </td>
-
-                              {/* Sede */}
                               <td className="py-2.5 px-3 whitespace-nowrap">
                                 {m.realizadoEn ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
@@ -2113,8 +2186,6 @@ const sortPeriodsChronologically = (periodList) => {
                                   <span className="text-slate-600 text-xs">-</span>
                                 )}
                               </td>
-
-                              {/* Detalle */}
                               <td className="py-2.5 px-3 text-slate-400 max-w-[200px]">
                                 <div className="font-medium text-slate-300 truncate">{m.detalle || '-'}</div>
                                 {m.detalleExtenso && (
@@ -2123,8 +2194,6 @@ const sortPeriodsChronologically = (periodList) => {
                                   </div>
                                 )}
                               </td>
-
-                              {/* Pago / Cheque */}
                               <td className="py-2.5 px-3 text-slate-400 max-w-[160px] truncate">
                                 {m.fechaPago ? (
                                   <div>
@@ -2138,30 +2207,20 @@ const sortPeriodsChronologically = (periodList) => {
                                   </span>
                                 )}
                               </td>
-
-                              {/* Pagos S (Egresos) */}
                               <td className="py-2.5 px-3 text-right font-mono text-slate-300">
                                 {m.pagosS > 0 ? fmtMoney(m.pagosS) : '-'}
                               </td>
-
-                              {/* Pagos Med (Bruto) */}
                               <td className="py-2.5 px-3 text-right font-mono text-indigo-300">
                                 {m.pagosMed > 0 ? fmtMoney(m.pagosMed) : '-'}
                               </td>
-
-                              {/* Retenciones */}
                               <td className="py-2.5 px-3 text-right font-mono text-amber-400/90">
                                 {m.retencionesMed > 0 ? fmtMoney(m.retencionesMed) : '-'}
                               </td>
-
-                              {/* Neto Medico */}
                               <td className="py-2.5 px-3 text-right font-mono font-bold text-indigo-400">
                                 {m.netoPagadoMed > 0 ? fmtMoney(m.netoPagadoMed) : '-'}
                               </td>
-
-                              {/* Ingresos Total */}
                               <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-400">
-                                {isIngreso ? fmtMoney(m.total || m.alquiConsultorios || 0) : '-'}
+                                {isIngreso ? fmtMoney(m.total || 0) : '-'}
                               </td>
                             </tr>
                           )
@@ -2171,7 +2230,6 @@ const sortPeriodsChronologically = (periodList) => {
                   </table>
                 </div>
 
-                {/* Tabla Footer Totales */}
                 <div className="bg-slate-950 p-4 border-t border-slate-800 flex justify-between items-center text-xs">
                   <span className="text-slate-400">
                     Mostrando <strong>{filteredMovimientos.length}</strong> de {movimientos.length} registros
@@ -2189,12 +2247,10 @@ const sortPeriodsChronologically = (periodList) => {
             </div>
           )}
 
-          {/* TAB 3: DASHBOARD & BALANCES PROFESIONAL */}
+          {/* TAB 3: DASHBOARD & BALANCES */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
-              {/* Executive KPI Summary Header */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Ingresos KPI Card */}
                 <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-emerald-500/40 transition">
                   <div className="flex justify-between items-start">
                     <div>
@@ -2214,7 +2270,6 @@ const sortPeriodsChronologically = (periodList) => {
                   </div>
                 </div>
 
-                {/* Egresos Operativos KPI Card */}
                 <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-rose-500/40 transition">
                   <div className="flex justify-between items-start">
                     <div>
@@ -2234,7 +2289,6 @@ const sortPeriodsChronologically = (periodList) => {
                   </div>
                 </div>
 
-                {/* Honorarios Médicos Netos KPI Card */}
                 <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-indigo-500/40 transition">
                   <div className="flex justify-between items-start">
                     <div>
@@ -2254,7 +2308,6 @@ const sortPeriodsChronologically = (periodList) => {
                   </div>
                 </div>
 
-                {/* Balance Neto / Superávit KPI Card */}
                 <div className={`bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border rounded-2xl p-5 shadow-xl relative overflow-hidden group transition ${
                   stats.saldoNeto >= 0 ? 'border-blue-500/30 hover:border-blue-400' : 'border-amber-500/30 hover:border-amber-400'
                 }`}>
@@ -2287,9 +2340,8 @@ const sortPeriodsChronologically = (periodList) => {
                 </div>
               </div>
 
-              {/* Central Charts Grid: Multi-Period Evolution & Category Breakdown */}
+              {/* Central Charts Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Chart 1: Evolución Temporal Multi-Período (Ingresos vs Egresos) */}
                 <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-800">
                     <div>
@@ -2340,7 +2392,6 @@ const sortPeriodsChronologically = (periodList) => {
                   </div>
                 </div>
 
-                {/* Chart 2: Distribución de Egresos por Rubro (Doughnut) */}
                 <div className="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
                   <div className="pb-4 border-b border-slate-800">
                     <h4 className="text-sm font-bold text-white flex items-center gap-2">
@@ -2362,7 +2413,7 @@ const sortPeriodsChronologically = (periodList) => {
                           paddingAngle={3}
                           dataKey="valor"
                         >
-                          {egresosPorRubroData.map((entry, index) => (
+                          {egresosPorRubroData.map((_entry, index) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
@@ -2374,7 +2425,6 @@ const sortPeriodsChronologically = (periodList) => {
                     </ResponsiveContainer>
                   </div>
 
-                  {/* Leyenda personalizada con porcentajes */}
                   <div className="space-y-1.5 pt-3 border-t border-slate-800 text-xs">
                     {egresosPorRubroData.slice(0, 4).map((r, i) => {
                       const pct = stats.totalEgresosTotal > 0 ? ((r.valor / stats.totalEgresosTotal) * 100).toFixed(1) : 0
@@ -2394,7 +2444,6 @@ const sortPeriodsChronologically = (periodList) => {
 
               {/* Bottom Row: Gastos por Sede & Top 5 Mayores Desembolsos */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Gastos por Sede */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
                   <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
                     <div>
@@ -2422,7 +2471,6 @@ const sortPeriodsChronologically = (periodList) => {
                   </div>
                 </div>
 
-                {/* Top 5 Entidades / Médicos con Mayor Desembolso */}
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
@@ -2518,9 +2566,9 @@ const sortPeriodsChronologically = (periodList) => {
                       {medicosData.map((m, i) => (
                         <tr key={m.id || i} className="hover:bg-slate-800/40">
                           <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{m.fecha}</td>
-                          <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">{m.facturaNro}</td>
+                          <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">{m.facturaNro || '-'}</td>
                           <td className="py-3 px-4 text-white font-bold whitespace-nowrap">{m.empresaConcepto}</td>
-                          <td className="py-3 px-4 text-slate-400 max-w-[200px] truncate">{m.detalle}</td>
+                          <td className="py-3 px-4 text-slate-400 max-w-[200px] truncate">{m.detalle || '-'}</td>
                           <td className="py-3 px-4 text-slate-400 whitespace-nowrap">
                             {m.fechaPago ? (
                               <span>{m.fechaPago} ({m.chequeOperacion || 'OP-TRANSF'})</span>
@@ -2549,7 +2597,7 @@ const sortPeriodsChronologically = (periodList) => {
             </div>
           )}
 
-          {/* TAB 5: TABLAS MAESTRAS (CRUD COMPLETO) */}
+          {/* TAB 5: TABLAS MAESTRAS (CRUD COMPLETO CON NUEVA TABLA) */}
           {activeTab === 'maestros' && (
             <div className="space-y-4 md:space-y-6">
               {/* Catalogs Header and Tabs */}
@@ -2561,92 +2609,60 @@ const sortPeriodsChronologically = (periodList) => {
                       Gestión de Tablas Maestras y Catálogos
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Agrega, modifica o elimina proveedores, profesionales médicos, empleados y sedes del sistema.
+                      Agrega, modifica o elimina proveedores, conceptos de gastos, honorarios, ingresos, médicos y sedes. Ordenados alfabéticamente.
                     </p>
                   </div>
 
-                  {/* Catalog Category Selector Tabs */}
-                  <div className="flex flex-wrap gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold overflow-x-auto">
-                    <button
-                      onClick={() => {
-                        setActiveCatalogTab('proveedores')
-                        setEditingItem(null)
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-                        activeCatalogTab === 'proveedores'
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Briefcase className="w-3.5 h-3.5" />
-                      Proveedores ({maestros.proveedores?.length || 0})
-                    </button>
+                  {/* Create New Category / Table Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsNewCategoryModalOpen(true)}
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition cursor-pointer self-start md:self-auto shrink-0"
+                  >
+                    <FolderPlus className="w-4 h-4 text-blue-400" />
+                    <span>+ Nueva Tabla / Catálogo</span>
+                  </button>
+                </div>
 
-                    <button
-                      onClick={() => {
-                        setActiveCatalogTab('medicos')
-                        setEditingItem(null)
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-                        activeCatalogTab === 'medicos'
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <UserCheck className="w-3.5 h-3.5" />
-                      Médicos ({maestros.medicos?.length || 0})
-                    </button>
+                {/* Catalog Category Selector Tabs */}
+                <div className="pt-4 flex flex-wrap gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold overflow-x-auto">
+                  {Object.keys(maestros).map((catKey) => {
+                    const label = catalogLabels[catKey] || catKey.replace(/_/g, ' ')
+                    const count = Array.isArray(maestros[catKey]) ? maestros[catKey].length : 0
+                    const isActive = activeCatalogTab === catKey
 
-                    <button
-                      onClick={() => {
-                        setActiveCatalogTab('empleados')
-                        setEditingItem(null)
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-                        activeCatalogTab === 'empleados'
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                      Personal ({maestros.empleados?.length || 0})
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setActiveCatalogTab('sedes')
-                        setEditingItem(null)
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-                        activeCatalogTab === 'sedes'
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Building2 className="w-3.5 h-3.5" />
-                      Sedes ({maestros.sedes?.length || 0})
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setActiveCatalogTab('impuestos')
-                        setEditingItem(null)
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-                        activeCatalogTab === 'impuestos'
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Scale className="w-3.5 h-3.5" />
-                      Impuestos ({maestros.impuestos?.length || 0})
-                    </button>
-                  </div>
+                    return (
+                      <button
+                        key={catKey}
+                        onClick={() => {
+                          setActiveCatalogTab(catKey)
+                          setEditingItem(null)
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap cursor-pointer ${
+                          isActive
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {catKey === 'proveedores' && <Briefcase className="w-3.5 h-3.5" />}
+                        {catKey === 'medicos' && <UserCheck className="w-3.5 h-3.5" />}
+                        {catKey === 'empleados' && <Users className="w-3.5 h-3.5" />}
+                        {catKey === 'conceptosGastos' && <Receipt className="w-3.5 h-3.5" />}
+                        {catKey === 'conceptosHonorarios' && <Calendar className="w-3.5 h-3.5" />}
+                        {catKey === 'ingresosTipos' && <TrendingUp className="w-3.5 h-3.5" />}
+                        {catKey === 'sedes' && <Building2 className="w-3.5 h-3.5" />}
+                        {catKey === 'impuestos' && <Scale className="w-3.5 h-3.5" />}
+                        <span>{label}</span>
+                        <span className="text-[10px] px-1 py-0.2 bg-slate-800/80 rounded font-mono">
+                          {count}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
 
                 {/* Form to Add New Item + Search Filter */}
                 <div className="pt-4 grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 items-center">
-                  {/* Add Input */}
                   <form
                     onSubmit={(e) => {
                       e.preventDefault()
@@ -2657,17 +2673,7 @@ const sortPeriodsChronologically = (periodList) => {
                     <input
                       type="text"
                       required
-                      placeholder={`Nuevo nombre de ${
-                        activeCatalogTab === 'proveedores'
-                          ? 'proveedor o empresa...'
-                          : activeCatalogTab === 'medicos'
-                          ? 'médico o profesional...'
-                          : activeCatalogTab === 'empleados'
-                          ? 'empleado...'
-                          : activeCatalogTab === 'sedes'
-                          ? 'sede o ubicación...'
-                          : 'impuesto u organismo...'
-                      }`}
+                      placeholder={`Nuevo ítem para ${catalogLabels[activeCatalogTab] || activeCatalogTab}...`}
                       value={newItemName}
                       onChange={(e) => setNewItemName(e.target.value)}
                       className="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-medium"
@@ -2681,12 +2687,11 @@ const sortPeriodsChronologically = (periodList) => {
                     </button>
                   </form>
 
-                  {/* Search filter within catalog */}
                   <div className="md:col-span-5 relative">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 sm:top-3 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder={`Filtrar en ${activeCatalogTab}...`}
+                      placeholder={`Filtrar en ${catalogLabels[activeCatalogTab] || activeCatalogTab}...`}
                       value={catalogSearch}
                       onChange={(e) => setCatalogSearch(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -2695,11 +2700,11 @@ const sortPeriodsChronologically = (periodList) => {
                 </div>
               </div>
 
-              {/* Items List Table / Cards with Edit and Delete */}
+              {/* Items List Table with Edit and Delete */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
                 <div className="p-3.5 sm:p-4 bg-slate-950/60 border-b border-slate-800 flex justify-between items-center text-xs">
                   <span className="font-semibold text-slate-300 uppercase tracking-wider">
-                    Listado de {activeCatalogTab}
+                    Listado de {catalogLabels[activeCatalogTab] || activeCatalogTab} (Orden Alfabético)
                   </span>
                   <span className="text-slate-400 font-mono">
                     Total: {maestros[activeCatalogTab]?.length || 0} registros
@@ -2707,7 +2712,7 @@ const sortPeriodsChronologically = (periodList) => {
                 </div>
 
                 <div className="divide-y divide-slate-800/60 max-h-[500px] overflow-y-auto">
-                  {(maestros[activeCatalogTab] || [])
+                  {sortAlphabetical(maestros[activeCatalogTab] || [])
                     .filter(
                       (item) =>
                         catalogSearch === '' || item.toLowerCase().includes(catalogSearch.toLowerCase())
@@ -2720,10 +2725,9 @@ const sortPeriodsChronologically = (periodList) => {
 
                       return (
                         <div
-                          key={index}
+                          key={item + index}
                           className="px-3.5 sm:px-5 py-3 flex items-center justify-between hover:bg-slate-800/40 transition group"
                         >
-                          {/* Item Name or Edit Input */}
                           <div className="flex-1 flex items-center gap-2 sm:gap-3 pr-2 sm:pr-4 min-w-0">
                             <span className="text-xs font-mono text-slate-500 w-6 sm:w-7 shrink-0">#{index + 1}</span>
 
@@ -2764,7 +2768,6 @@ const sortPeriodsChronologically = (periodList) => {
                             )}
                           </div>
 
-                          {/* Action Buttons */}
                           {!isEditing && (
                             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                               <button
@@ -2818,14 +2821,14 @@ const sortPeriodsChronologically = (periodList) => {
                   <h3 className="font-bold text-sm sm:text-base text-white truncate">
                     {modalType === 'EGRESO' && 'Cargar Egreso / Factura'}
                     {modalType === 'MEDICO' && 'Cargar Honorario Médico'}
-                    {modalType === 'INGRESO' && 'Cargar Ingreso'}
+                    {modalType === 'INGRESO' && 'Cargar Ingreso (CFL, CENS, Billeteras, Policlínica)'}
                   </h3>
                   <p className="text-xs text-slate-400">Período: {selectedMes}</p>
                 </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2876,7 +2879,7 @@ const sortPeriodsChronologically = (periodList) => {
                     ) && (
                       <span className="text-[10px] text-rose-400 font-semibold flex items-center gap-1 mt-1">
                         <AlertCircle className="w-3 h-3 text-rose-400" />
-                        Ya existe una factura con este Nº para {formData.empresaConcepto}
+                        Ya existe un comprobante con este Nº para {formData.empresaConcepto}
                       </span>
                     )}
                 </div>
@@ -2903,7 +2906,6 @@ const sortPeriodsChronologically = (periodList) => {
                       <ChevronDown className="w-4 h-4 text-slate-400" />
                     </button>
 
-                    {/* Popover con Buscador en Vivo y Lista */}
                     {isDropdownOpen && (
                       <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                         <div className="p-2 border-b border-slate-800 bg-slate-950">
@@ -2921,8 +2923,8 @@ const sortPeriodsChronologically = (periodList) => {
                         </div>
 
                         <div className="max-h-48 overflow-y-auto p-1 divide-y divide-slate-800/40">
-                          {maestros.medicos
-                            ?.filter((m) =>
+                          {sortAlphabetical(maestros.medicos || [])
+                            .filter((m) =>
                               entitySearchFilter === '' ||
                               m.toLowerCase().includes(entitySearchFilter.toLowerCase())
                             )
@@ -2943,13 +2945,6 @@ const sortPeriodsChronologically = (periodList) => {
                                 {formData.empresaConcepto === m && <Check className="w-3.5 h-3.5 text-white" />}
                               </div>
                             ))}
-                          {maestros.medicos?.filter((m) =>
-                            m.toLowerCase().includes(entitySearchFilter.toLowerCase())
-                          ).length === 0 && (
-                            <div className="p-3 text-center text-xs text-slate-500">
-                              No se encontraron médicos con "{entitySearchFilter}"
-                            </div>
-                          )}
                         </div>
                       </div>
                     )}
@@ -3006,7 +3001,6 @@ const sortPeriodsChronologically = (periodList) => {
                       <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
                     </button>
 
-                    {/* Popover con Buscador en Vivo y Lista para Egresos */}
                     {isDropdownOpen && (
                       <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                         <div className="p-2 border-b border-slate-800 bg-slate-950">
@@ -3024,13 +3018,14 @@ const sortPeriodsChronologically = (periodList) => {
                         </div>
 
                         <div className="max-h-48 overflow-y-auto p-1 divide-y divide-slate-800/40">
-                          {(formData.rubro === 'EMPLEADOS'
-                            ? maestros.empleados
-                            : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
-                            ? maestros.impuestos
-                            : maestros.proveedores
+                          {sortAlphabetical(
+                            formData.rubro === 'EMPLEADOS'
+                              ? maestros.empleados || []
+                              : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
+                              ? maestros.impuestos || []
+                              : maestros.proveedores || []
                           )
-                            ?.filter((ent) =>
+                            .filter((ent) =>
                               entitySearchFilter === '' ||
                               ent.toLowerCase().includes(entitySearchFilter.toLowerCase())
                             )
@@ -3059,7 +3054,7 @@ const sortPeriodsChronologically = (periodList) => {
               ) : (
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">
-                    Concepto de Ingreso <span className="text-rose-400">*</span>
+                    Concepto Principal de Ingreso <span className="text-rose-400">*</span>
                   </label>
                   <select
                     required
@@ -3068,7 +3063,7 @@ const sortPeriodsChronologically = (periodList) => {
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                   >
                     <option value="">-- Seleccione concepto de ingreso --</option>
-                    {maestros.ingresosTipos?.map((it) => (
+                    {sortAlphabetical(maestros.ingresosTipos || []).map((it) => (
                       <option key={it} value={it}>
                         {it}
                       </option>
@@ -3077,31 +3072,56 @@ const sortPeriodsChronologically = (periodList) => {
                 </div>
               )}
 
-              {/* Sede y Detalle Corto */}
+              {/* Sede y Detalle Desplegable con Palomita */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Sede / Ubicación</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">
+                    Sede / Ubicación
+                  </label>
                   <select
                     value={formData.realizadoEn}
                     onChange={(e) => handleInputChange('realizadoEn', e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
                   >
-                    {maestros.sedes?.map((s) => (
+                    {sortAlphabetical(maestros.sedes || []).map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
                     ))}
                   </select>
                 </div>
+
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Período / Detalle Resumido</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Hon Ene 26, Gastos Generales..."
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">
+                    {modalType === 'MEDICO' ? 'Período / Detalle' : 'Concepto / Detalle'} <span className="text-rose-400">*</span>
+                  </label>
+                  
+                  {/* Desplegable Palomita */}
+                  <select
                     value={formData.detalle}
                     onChange={(e) => handleInputChange('detalle', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                  />
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                  >
+                    <option value="">-- Seleccione opción sugerida --</option>
+                    {(modalType === 'MEDICO'
+                      ? maestros.conceptosHonorarios || []
+                      : maestros.conceptosGastos || []
+                    ).map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="mt-1.5">
+                    <input
+                      type="text"
+                      placeholder={modalType === 'MEDICO' ? 'O escribe período específico (ej: Hon Ago 26)...' : 'O escribe detalle personalizado...'}
+                      value={formData.detalle}
+                      onChange={(e) => handleInputChange('detalle', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -3114,8 +3134,8 @@ const sortPeriodsChronologically = (periodList) => {
                   <span className="text-[10px] text-slate-500 font-mono">Multi-línea</span>
                 </div>
                 <textarea
-                  rows={3}
-                  placeholder="Escribe aquí información detallada: descripción de insumos, ítems de la factura, notas adicionales..."
+                  rows={2}
+                  placeholder="Escribe aquí información adicional, número de remito, notas..."
                   value={formData.detalleExtenso}
                   onChange={(e) => handleInputChange('detalleExtenso', e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 leading-relaxed font-sans"
@@ -3125,7 +3145,7 @@ const sortPeriodsChronologically = (periodList) => {
               {/* Importes según el tipo */}
               {modalType === 'EGRESO' && (
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Importe Pagado ($)</label>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Importe Pagado / Factura ($)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -3140,7 +3160,6 @@ const sortPeriodsChronologically = (periodList) => {
 
               {modalType === 'MEDICO' && (
                 <div className="bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800 space-y-3 sm:space-y-4">
-                  {/* Checkbox para activar/desactivar retención */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <input
@@ -3216,62 +3235,175 @@ const sortPeriodsChronologically = (periodList) => {
                 </div>
               )}
 
+              {/* MODAL INGRESO: CAMPOS SEPARADOS PARA CFL, CENS, BILLETERAS, POLICLÍNICA */}
               {modalType === 'INGRESO' && (
-                <div className="bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800 space-y-3">
-                  <p className="text-xs font-semibold text-slate-300">Desglose de Ingresos por Concepto ($)</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                <div className="bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      Desglose de Ingresos por Origen ($)
+                    </p>
+                    <span className="text-xs font-mono font-bold text-emerald-400">
+                      Total: {fmtMoney(
+                        Number(formData.ingresosCFL || 0) +
+                        Number(formData.ingresosCENS || 0) +
+                        Number(formData.ingresosBilleteras || 0) +
+                        Number(formData.alquiConsultorios || 0) +
+                        Number(formData.alquilerCpoSalon || 0) +
+                        Number(formData.ventaCantina || 0) +
+                        Number(formData.usoNatatorio || 0) +
+                        Number(formData.practicas || 0) +
+                        Number(formData.consultas || 0) +
+                        Number(formData.enfermeria || 0) +
+                        Number(formData.odontologia || 0) +
+                        Number(formData.otIngresos || 0) +
+                        Number(formData.compensaciones || 0)
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Bloque Institucional & Cobros Digitales */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80">
                     <div>
-                      <label className="text-[11px] text-slate-400 block">Alquiler Salón</label>
+                      <label className="text-[11px] font-bold text-blue-400 block mb-1">
+                        🏛️ Ingresos CFL
+                      </label>
                       <input
                         type="number"
-                        value={formData.alquilerCpoSalon || ''}
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.ingresosCFL}
+                        onChange={(e) => handleInputChange('ingresosCFL', e.target.value)}
+                        className="w-full bg-slate-950 border border-blue-500/40 rounded px-2.5 py-1.5 text-xs text-white font-mono font-bold focus:border-blue-400 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-indigo-400 block mb-1">
+                        🎓 Ingresos CENS
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.ingresosCENS}
+                        onChange={(e) => handleInputChange('ingresosCENS', e.target.value)}
+                        className="w-full bg-slate-950 border border-indigo-500/40 rounded px-2.5 py-1.5 text-xs text-white font-mono font-bold focus:border-indigo-400 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-emerald-400 block mb-1">
+                        📱 Billeteras (Loc. Consultorios)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.ingresosBilleteras}
+                        onChange={(e) => handleInputChange('ingresosBilleteras', e.target.value)}
+                        className="w-full bg-slate-950 border border-emerald-500/40 rounded px-2.5 py-1.5 text-xs text-white font-mono font-bold focus:border-emerald-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Resto de Rubros */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Alquiler Consultorios (Otros)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.alquiConsultorios}
+                        onChange={(e) => handleInputChange('alquiConsultorios', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Alquiler Salón / Campo</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.alquilerCpoSalon}
                         onChange={(e) => handleInputChange('alquilerCpoSalon', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-slate-400 block">Venta Cantina</label>
+                      <label className="text-[11px] text-slate-400 block mb-1">Venta Cantina</label>
                       <input
                         type="number"
-                        value={formData.ventaCantina || ''}
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.ventaCantina}
                         onChange={(e) => handleInputChange('ventaCantina', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-slate-400 block">Uso Natatorio</label>
+                      <label className="text-[11px] text-slate-400 block mb-1">Uso Natatorio</label>
                       <input
                         type="number"
-                        value={formData.usoNatatorio || ''}
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.usoNatatorio}
                         onChange={(e) => handleInputChange('usoNatatorio', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-slate-400 block">Consultas</label>
+                      <label className="text-[11px] text-slate-400 block mb-1">Consultas</label>
                       <input
                         type="number"
-                        value={formData.consultas || ''}
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.consultas}
                         onChange={(e) => handleInputChange('consultas', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-slate-400 block">Prácticas</label>
+                      <label className="text-[11px] text-slate-400 block mb-1">Prácticas</label>
                       <input
                         type="number"
-                        value={formData.practicas || ''}
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.practicas}
                         onChange={(e) => handleInputChange('practicas', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-slate-400 block">Odontología</label>
+                      <label className="text-[11px] text-slate-400 block mb-1">Odontología</label>
                       <input
                         type="number"
-                        value={formData.odontologia || ''}
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.odontologia}
                         onChange={(e) => handleInputChange('odontologia', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono"
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Enfermería</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.enfermeria}
+                        onChange={(e) => handleInputChange('enfermeria', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Otros Ingresos / Comp.</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={formData.otIngresos}
+                        onChange={(e) => handleInputChange('otIngresos', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                       />
                     </div>
                   </div>
@@ -3340,15 +3472,75 @@ const sortPeriodsChronologically = (periodList) => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3.5 sm:px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                  className="px-3.5 sm:px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 sm:px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition"
+                  className="px-4 sm:px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition cursor-pointer"
                 >
                   Guardar Movimiento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CREAR NUEVA CATEGORÍA / TABLA MAESTRA */}
+      {isNewCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/60">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                  <FolderPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">Crear Nueva Tabla / Catálogo</h3>
+                  <p className="text-xs text-slate-400">Habilita una nueva categoría de maestros</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewCategoryModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCategory} className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  Nombre de la Tabla o Catálogo
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Ej: Insumos de Farmacia, Convenios, Bancos..."
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsNewCategoryModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Crear Tabla</span>
                 </button>
               </div>
             </form>
@@ -3360,7 +3552,6 @@ const sortPeriodsChronologically = (periodList) => {
       {isNewPeriodModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-            {/* Header */}
             <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/60">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
@@ -3374,13 +3565,12 @@ const sortPeriodsChronologically = (periodList) => {
               <button
                 type="button"
                 onClick={() => setIsNewPeriodModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleCreatePeriod} className="p-6 space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1.5">
@@ -3439,7 +3629,6 @@ const sortPeriodsChronologically = (periodList) => {
                 </div>
               </div>
 
-              {/* Preview */}
               <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
                 <span className="text-slate-400">Nombre del Período:</span>
                 <span className="font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/30">
@@ -3447,12 +3636,11 @@ const sortPeriodsChronologically = (periodList) => {
                 </span>
               </div>
 
-              {/* Actions */}
               <div className="pt-3 border-t border-slate-800 flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsNewPeriodModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -3471,4 +3659,3 @@ const sortPeriodsChronologically = (periodList) => {
     </div>
   )
 }
-
