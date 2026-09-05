@@ -1038,7 +1038,7 @@ export default function App() {
 
   // Chart Data 3: Distribución del Gasto por Sede
   const gastosPorSedeData = useMemo(() => {
-    const昆sedeMap = {}
+    const sedeMap = {}
     const periodMovs = selectedMes
       ? movimientos.filter((m) => (m.mesPeriodo ? m.mesPeriodo.trim() === selectedMes.trim() : true))
       : movimientos
@@ -1047,11 +1047,11 @@ export default function App() {
       if (m.rubro === 'INGRESOS') return
       const s = m.realizadoEn || 'Policlinica AMOS'
       const amount = Number(m.pagosS || 0) + Number(m.netoPagadoMed || 0)
-      昆sedeMap[s] = (昆sedeMap[s] || 0) + amount
+      sedeMap[s] = (sedeMap[s] || 0) + amount
     })
 
-    return Object.keys(昆sedeMap)
-      .map((k) => ({ name: k, total: 昆sedeMap[k] }))
+    return Object.keys(sedeMap)
+      .map((k) => ({ name: k, total: sedeMap[k] }))
       .sort((a, b) => b.total - a.total)
   }, [movimientos, selectedMes])
 
