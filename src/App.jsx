@@ -43,7 +43,12 @@ import {
   ArrowLeft,
   FolderPlus,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  FileText,
+  Landmark,
+  Smartphone,
+  Zap,
+  Sparkles
 } from 'lucide-react'
 import {
   BarChart,
@@ -617,6 +622,18 @@ export default function App() {
     realizadoEn: 'Policlinica AMOS',
     fechaPago: '',
     chequeOperacion: '',
+    // Medio de Pago y Cheques
+    medioPagoTipo: 'TRANSFERENCIA', // 'TRANSFERENCIA' | 'CHEQUE' | 'EFECTIVO' | 'DEBITO' | 'OTRO'
+    chequeTipo: 'PROPIO', // 'PROPIO' | 'TERCERO'
+    chequeFormato: 'FISICO', // 'FISICO' | 'ECHEQ'
+    chequeNumero: '',
+    chequeBanco: '',
+    chequeFechaCobro: '',
+    chequeEmisor: '',
+    chequeTitular: '',
+    chequeCuit: '',
+    chequeCruzado: false,
+    chequeNoALaOrden: false,
     // Egresos
     pagosS: '',
     // Medicos
@@ -1181,6 +1198,48 @@ export default function App() {
     const hasRet = retMed > 0
     const pctRet = hasRet && pagMed > 0 ? Number(((retMed / pagMed) * 100).toFixed(0)) : 5
 
+    const rawRef = mov.chequeOperacion || ''
+    let parsedMedioPago = 'TRANSFERENCIA'
+    let parsedChequeTipo = 'PROPIO'
+    let parsedChequeFormato = 'FISICO'
+    let parsedChequeNumero = ''
+    let parsedChequeBanco = ''
+    let parsedChequeFechaCobro = ''
+    let parsedChequeEmisor = ''
+    let parsedChequeTitular = ''
+    let parsedChequeCuit = ''
+    let parsedChequeCruzado = false
+    let parsedChequeNoALaOrden = false
+
+    const upperRef = rawRef.toUpperCase()
+    if (upperRef.includes('CHEQUE') || upperRef.includes('CHQ') || upperRef.includes('ECHEQ')) {
+      parsedMedioPago = 'CHEQUE'
+      if (upperRef.includes('TERCERO')) parsedChequeTipo = 'TERCERO'
+      else if (upperRef.includes('PROPIO')) parsedChequeTipo = 'PROPIO'
+      
+      if (upperRef.includes('ECHEQ') || upperRef.includes('ELECTR')) parsedChequeFormato = 'ECHEQ'
+      else parsedChequeFormato = 'FISICO'
+      
+      if (upperRef.includes('CRUZADO')) parsedChequeCruzado = true
+      if (upperRef.includes('NO A LA ORDEN')) parsedChequeNoALaOrden = true
+      
+      // Intentar extraer número si existe "N°..." o "Nº..." o dígitos
+      const numMatch = rawRef.match(/N[º°#]?\s*([0-9A-Za-z-]+)/i)
+      if (numMatch) parsedChequeNumero = numMatch[1]
+      
+      // Intentar extraer banco "Bco..." o "Banco..."
+      const bcoMatch = rawRef.match(/(?:Banco|Bco\.?)\s+([A-Za-z0-9\s]+?)(?:\s*-\s*|\s*\||\s*\(|$)/i)
+      if (bcoMatch) parsedChequeBanco = bcoMatch[1].trim()
+      
+      // Intentar extraer cobro
+      const cobroMatch = rawRef.match(/Cobro:?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{2}\/[0-9]{2}\/[0-9]{4})/i)
+      if (cobroMatch) parsedChequeFechaCobro = cobroMatch[1].trim()
+    } else if (upperRef.includes('EFECTIVO')) {
+      parsedMedioPago = 'EFECTIVO'
+    } else if (upperRef.includes('DEBITO') || upperRef.includes('DÉBITO') || upperRef.includes('TARJETA')) {
+      parsedMedioPago = 'DEBITO'
+    }
+
     setFormData({
       fecha: mov.fecha ? String(mov.fecha).slice(0, 10) : getTodayLocalDate(),
       facturaNro: mov.facturaNro || '',
@@ -1191,6 +1250,17 @@ export default function App() {
       realizadoEn: mov.realizadoEn || 'Policlinica AMOS',
       fechaPago: mov.fechaPago ? String(mov.fechaPago).slice(0, 10) : '',
       chequeOperacion: mov.chequeOperacion || '',
+      medioPagoTipo: parsedMedioPago,
+      chequeTipo: parsedChequeTipo,
+      chequeFormato: parsedChequeFormato,
+      chequeNumero: parsedChequeNumero,
+      chequeBanco: parsedChequeBanco,
+      chequeFechaCobro: parsedChequeFechaCobro,
+      chequeEmisor: parsedChequeEmisor,
+      chequeTitular: parsedChequeTitular,
+      chequeCuit: parsedChequeCuit,
+      chequeCruzado: parsedChequeCruzado,
+      chequeNoALaOrden: parsedChequeNoALaOrden,
       pagosS: mov.pagosS ? String(mov.pagosS) : '',
       pagosMed: mov.pagosMed ? String(mov.pagosMed) : '',
       aplicarRetencion: hasRet,
@@ -1378,6 +1448,39 @@ export default function App() {
         Number(formData.compensaciones || 0)
     }
 
+    // Construir referencia completa de Medio de Pago / Cheque
+    let computedChequeRef = formData.chequeOperacion || ''
+    if (formData.medioPagoTipo === 'CHEQUE') {
+      const partesCheque = []
+      const esEcheq = formData.chequeFormato === 'ECHEQ'
+      const labelTipo = formData.chequeTipo === 'TERCERO' ? 'Tercero' : 'Propio'
+      const labelFormato = esEcheq ? 'E-Cheq' : 'Cheque Físico'
+      
+      partesCheque.push(`${labelFormato} ${labelTipo}`)
+      
+      if (formData.chequeNumero) {
+        partesCheque.push(`N° ${formData.chequeNumero}`)
+      }
+      if (formData.chequeBanco) {
+        partesCheque.push(`Bco: ${formData.chequeBanco}`)
+      }
+      if (formData.chequeFechaCobro) {
+        partesCheque.push(`Cobro: ${formData.chequeFechaCobro}`)
+      }
+      if (formData.chequeTipo === 'TERCERO') {
+        if (formData.chequeEmisor) partesCheque.push(`Librador: ${formData.chequeEmisor}`)
+        if (formData.chequeCuit) partesCheque.push(`CUIT: ${formData.chequeCuit}`)
+      }
+      if (formData.chequeCruzado) partesCheque.push('Cruzado')
+      if (formData.chequeNoALaOrden) partesCheque.push('No a la orden')
+      
+      computedChequeRef = partesCheque.join(' | ')
+    } else if (formData.medioPagoTipo === 'EFECTIVO') {
+      computedChequeRef = formData.chequeOperacion ? `Efectivo - ${formData.chequeOperacion}` : 'Efectivo'
+    } else if (formData.medioPagoTipo === 'DEBITO') {
+      computedChequeRef = formData.chequeOperacion ? `Débito - ${formData.chequeOperacion}` : 'Débito / Tarjeta'
+    }
+
     if (editingId) {
       // 1. MODO EDICIÓN / MODIFICAR
       const currentMov = movimientos.find((m) => m.id === editingId) || {}
@@ -1391,7 +1494,7 @@ export default function App() {
         detalleExtenso: formData.detalleExtenso,
         realizadoEn: formData.realizadoEn || 'Policlinica AMOS',
         fechaPago: formData.fechaPago || null,
-        chequeOperacion: formData.chequeOperacion || null,
+        chequeOperacion: computedChequeRef || null,
         pagosS: modalType === 'EGRESO' ? Number(formData.pagosS || 0) : 0,
         pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
         retencionesMed: modalType === 'MEDICO' ? Number(formData.retencionesMed || 0) : 0,
@@ -1465,7 +1568,7 @@ export default function App() {
         detalleExtenso: formData.detalleExtenso,
         realizadoEn: formData.realizadoEn || 'Policlinica AMOS',
         fechaPago: formData.fechaPago || null,
-        chequeOperacion: formData.chequeOperacion || null,
+        chequeOperacion: computedChequeRef || null,
         mesPeriodo: selectedMes,
         pagosS: modalType === 'EGRESO' ? Number(formData.pagosS || 0) : 0,
         pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
@@ -4026,11 +4129,11 @@ export default function App() {
                 </div>
               )}
 
-              {/* Pago / Cheque */}
-              <div className="bg-slate-950/60 p-3 sm:p-3.5 rounded-xl border border-slate-800 space-y-3">
+              {/* Pago / Cheque / Medio de Pago */}
+              <div className="bg-slate-950/70 p-3.5 sm:p-4 rounded-xl border border-slate-800/90 space-y-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+                    <CreditCard className="w-4 h-4 text-blue-400" />
                     <span className="text-xs font-bold text-slate-200">
                       Estado y Medio de Pago
                     </span>
@@ -4100,19 +4203,213 @@ export default function App() {
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
                     />
                   </div>
+
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-300 block mb-1">
+                      Medio / Instrumento de Pago
+                    </label>
+                    <div className="grid grid-cols-4 gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                      {[
+                        { id: 'TRANSFERENCIA', label: 'Transf.', icon: Landmark },
+                        { id: 'CHEQUE', label: 'Cheque', icon: FileText },
+                        { id: 'EFECTIVO', label: 'Efectivo', icon: Wallet },
+                        { id: 'DEBITO', label: 'Débito', icon: CreditCard }
+                      ].map((m) => {
+                        const Icon = m.icon
+                        const isSelected = formData.medioPagoTipo === m.id
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => handleInputChange('medioPagoTipo', m.id)}
+                            className={`flex items-center justify-center gap-1 py-1.5 rounded text-[11px] font-semibold transition cursor-pointer ${
+                              isSelected
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                            }`}
+                          >
+                            <Icon className="w-3 h-3" />
+                            <span>{m.label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-formulario detallado cuando se elige CHEQUE */}
+                {formData.medioPagoTipo === 'CHEQUE' && (
+                  <div className="bg-slate-900/90 border border-blue-500/30 rounded-xl p-3 sm:p-3.5 space-y-3 shadow-inner">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                      <div className="flex items-center gap-1.5 text-blue-400 text-xs font-bold">
+                        <FileText className="w-4 h-4" />
+                        <span>Detalles del Cheque</span>
+                      </div>
+                      
+                      {/* Tipo de Cheque: Propio vs Tercero */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400">Tipo:</span>
+                        <div className="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange('chequeTipo', 'PROPIO')}
+                            className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer ${
+                              formData.chequeTipo === 'PROPIO'
+                                ? 'bg-blue-600 text-white'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            Propio
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange('chequeTipo', 'TERCERO')}
+                            className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer ${
+                              formData.chequeTipo === 'TERCERO'
+                                ? 'bg-purple-600 text-white'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            De Tercero
+                          </button>
+                        </div>
+
+                        {/* Formato: Físico vs E-Cheq */}
+                        <span className="text-[11px] text-slate-400 ml-1">Formato:</span>
+                        <div className="inline-flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange('chequeFormato', 'FISICO')}
+                            className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer flex items-center gap-1 ${
+                              formData.chequeFormato === 'FISICO'
+                                ? 'bg-emerald-600 text-white'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <FileText className="w-2.5 h-2.5" />
+                            Papel / Físico
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange('chequeFormato', 'ECHEQ')}
+                            className={`px-2 py-0.5 rounded font-semibold transition cursor-pointer flex items-center gap-1 ${
+                              formData.chequeFormato === 'ECHEQ'
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <Zap className="w-2.5 h-2.5" />
+                            E-Cheq (Electrónico)
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                          Nº de Cheque
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ej: 00482910"
+                          value={formData.chequeNumero}
+                          onChange={(e) => handleInputChange('chequeNumero', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                          Banco Emisor / Cuenta
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ej: Banco Nación / Galicia / Francés"
+                          value={formData.chequeBanco}
+                          onChange={(e) => handleInputChange('chequeBanco', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                          Fecha Cobro / Vencimiento
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.chequeFechaCobro}
+                          onChange={(e) => handleInputChange('chequeFechaCobro', e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {formData.chequeTipo === 'TERCERO' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-800/80">
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                            Librador / Titular del Cheque (Tercero)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Nombre / Razón Social del emisor original"
+                            value={formData.chequeEmisor}
+                            onChange={(e) => handleInputChange('chequeEmisor', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                            CUIT Librador
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ej: 30-71234567-9"
+                            value={formData.chequeCuit}
+                            onChange={(e) => handleInputChange('chequeCuit', e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-4 pt-1">
+                      <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={formData.chequeCruzado}
+                          onChange={(e) => handleInputChange('chequeCruzado', e.target.checked)}
+                          className="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0 w-3.5 h-3.5"
+                        />
+                        <span>Cruzado</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={formData.chequeNoALaOrden}
+                          onChange={(e) => handleInputChange('chequeNoALaOrden', e.target.checked)}
+                          className="rounded border-slate-700 bg-slate-950 text-blue-600 focus:ring-0 w-3.5 h-3.5"
+                        />
+                        <span>No a la orden</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* Campo de Referencia / Transferencia / OP para cuando no es Cheque o como complemento */}
+                {formData.medioPagoTipo !== 'CHEQUE' && (
                   <div>
                     <label className="text-[11px] font-medium text-slate-400 block mb-1">
-                      Cheque / Ref. {formData.fechaPago ? '' : '(Opcional)'}
+                      Referencia / Nº de Transf. / OP {formData.fechaPago ? '' : '(Opcional)'}
                     </label>
                     <input
                       type="text"
-                      placeholder="Nº de Cheque, Transf, OP, etc..."
+                      placeholder="Nº de Transferencia, comprobante bancario, OP, etc..."
                       value={formData.chequeOperacion}
                       onChange={(e) => handleInputChange('chequeOperacion', e.target.value)}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
                     />
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Submit / Action Buttons */}
