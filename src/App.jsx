@@ -670,6 +670,8 @@ export default function App() {
   const [editingId, setEditingId] = useState(null)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [entitySearchFilter, setEntitySearchFilter] = useState('')
+  const [isBankDropdownOpen, setIsBankDropdownOpen] = useState(false)
+  const [bankSearchFilter, setBankSearchFilter] = useState('')
   
   // Helper to obtain a fresh, blank form state for any modal type
   const getCleanFormData = useCallback((type = 'EGRESO') => ({
@@ -1230,6 +1232,8 @@ export default function App() {
     setEditingId(null)
     setIsDropdownOpen(false)
     setEntitySearchFilter('')
+    setIsBankDropdownOpen(false)
+    setBankSearchFilter('')
     setFormData(getCleanFormData(modalType))
   }
 
@@ -1239,6 +1243,8 @@ export default function App() {
     setModalType(type)
     setIsDropdownOpen(false)
     setEntitySearchFilter('')
+    setIsBankDropdownOpen(false)
+    setBankSearchFilter('')
     setFormData(getCleanFormData(type))
     setIsModalOpen(true)
   }
@@ -1252,6 +1258,8 @@ export default function App() {
     setModalType(type)
     setIsDropdownOpen(false)
     setEntitySearchFilter('')
+    setIsBankDropdownOpen(false)
+    setBankSearchFilter('')
 
     const retMed = Number(mov.retencionesMed || 0)
     const pagMed = Number(mov.pagosMed || 0)
@@ -4378,23 +4386,117 @@ export default function App() {
                           className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
                         />
                       </div>
-                      <div>
+                      <div className="relative">
                         <label className="text-[10px] font-semibold text-slate-400 block mb-1">
                           Banco Emisor / Cuenta
                         </label>
-                        <input
-                          type="text"
-                          list="bancos-argentina-list"
-                          placeholder="Buscar o seleccionar banco..."
-                          value={formData.chequeBanco}
-                          onChange={(e) => handleInputChange('chequeBanco', e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
-                        />
-                        <datalist id="bancos-argentina-list">
-                          {BANCOS_ARGENTINA.map((banco) => (
-                            <option key={banco} value={banco} />
-                          ))}
-                        </datalist>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="Buscar banco (ej: Galicia, Nación, BBVA)..."
+                            value={formData.chequeBanco}
+                            onFocus={() => {
+                              setIsBankDropdownOpen(true)
+                              setBankSearchFilter(formData.chequeBanco || '')
+                            }}
+                            onChange={(e) => {
+                              handleInputChange('chequeBanco', e.target.value)
+                              setBankSearchFilter(e.target.value)
+                              setIsBankDropdownOpen(true)
+                            }}
+                            className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 pr-14"
+                          />
+                          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                            {formData.chequeBanco && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleInputChange('chequeBanco', '')
+                                  setBankSearchFilter('')
+                                }}
+                                className="p-1 hover:text-slate-200 text-slate-500 rounded"
+                                title="Limpiar selección"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setIsBankDropdownOpen(!isBankDropdownOpen)}
+                              className="p-1 text-slate-400 hover:text-slate-200 rounded"
+                            >
+                              <ChevronDown className={`w-3 h-3 transition-transform ${isBankDropdownOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Searchable Dropdown List */}
+                        {isBankDropdownOpen && (
+                          <div className="absolute z-50 left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                            <div className="p-1.5 border-b border-slate-800 bg-slate-950/80 flex items-center gap-1.5">
+                              <Search className="w-3 h-3 text-slate-400 shrink-0" />
+                              <input
+                                type="text"
+                                autoFocus
+                                placeholder="Filtrar entre todos los bancos..."
+                                value={bankSearchFilter}
+                                onChange={(e) => setBankSearchFilter(e.target.value)}
+                                className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+                              />
+                              {bankSearchFilter && (
+                                <button
+                                  type="button"
+                                  onClick={() => setBankSearchFilter('')}
+                                  className="text-slate-500 hover:text-slate-300 text-[10px]"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="max-h-48 overflow-y-auto divide-y divide-slate-800/40 custom-scrollbar">
+                              {BANCOS_ARGENTINA.filter((b) =>
+                                b.toLowerCase().includes((bankSearchFilter || '').toLowerCase().trim())
+                              ).map((banco) => (
+                                <button
+                                  key={banco}
+                                  type="button"
+                                  onClick={() => {
+                                    handleInputChange('chequeBanco', banco)
+                                    setIsBankDropdownOpen(false)
+                                    setBankSearchFilter('')
+                                  }}
+                                  className={`w-full text-left px-2.5 py-1.5 text-xs transition flex items-center justify-between cursor-pointer ${
+                                    formData.chequeBanco === banco
+                                      ? 'bg-blue-600/30 text-blue-300 font-semibold'
+                                      : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
+                                  }`}
+                                >
+                                  <span className="truncate">{banco}</span>
+                                  {formData.chequeBanco === banco && (
+                                    <Check className="w-3 h-3 text-blue-400 shrink-0 ml-1" />
+                                  )}
+                                </button>
+                              ))}
+                              {BANCOS_ARGENTINA.filter((b) =>
+                                b.toLowerCase().includes((bankSearchFilter || '').toLowerCase().trim())
+                              ).length === 0 && (
+                                <div className="px-3 py-3 text-center text-xs text-slate-500">
+                                  <span>No se encontró ningún banco oficial con ese nombre.</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleInputChange('chequeBanco', bankSearchFilter)
+                                      setIsBankDropdownOpen(false)
+                                    }}
+                                    className="block mx-auto mt-1 text-[11px] text-blue-400 hover:underline cursor-pointer"
+                                  >
+                                    Usar "{bankSearchFilter}" como banco personalizado
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="text-[10px] font-semibold text-slate-400 block mb-1">
