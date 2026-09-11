@@ -41,7 +41,9 @@ import {
   KeyRound,
   Menu,
   ArrowLeft,
-  FolderPlus
+  FolderPlus,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react'
 import {
   BarChart,
@@ -270,6 +272,7 @@ export default function App() {
   const [selectedMes, setSelectedMes] = useState('ENERO 26')
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isMobileCCDetailOpen, setIsMobileCCDetailOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   // Data state
   const [movimientos, setMovimientos] = useState(initialData.movimientos || initialData.movimientosEnero || [])
@@ -1659,102 +1662,142 @@ export default function App() {
 
       {/* SIDEBAR */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transform transition-transform duration-200 ease-in-out md:static md:translate-x-0 print:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 ${
+          isSidebarCollapsed ? 'w-72 md:w-20' : 'w-72 md:w-64'
+        } bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transform transition-all duration-200 ease-in-out md:static md:translate-x-0 print:hidden ${
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div>
+        <div className="flex flex-col min-h-0">
           {/* Logo / Header */}
-          <div className="p-4 md:p-5 border-b border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <div className="p-3.5 md:p-4 border-b border-slate-800 flex items-center justify-between gap-2">
+            <div className={`flex items-center gap-2.5 min-w-0 ${isSidebarCollapsed ? 'md:justify-center md:w-full' : ''}`}>
+              <div
+                onClick={() => isSidebarCollapsed && setIsSidebarCollapsed(false)}
+                className={`w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0 ${
+                  isSidebarCollapsed ? 'cursor-pointer' : ''
+                }`}
+                title={isSidebarCollapsed ? 'Haga clic para expandir menú' : 'Sistema Gestión'}
+              >
                 <Scale className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <h1 className="font-bold text-base tracking-tight text-white">Sistema Gestión</h1>
-                <p className="text-xs text-slate-400">Contabilidad & Finanzas</p>
-              </div>
+              {!isSidebarCollapsed && (
+                <div className="min-w-0">
+                  <h1 className="font-bold text-sm md:text-base tracking-tight text-white truncate">Sistema Gestión</h1>
+                  <p className="text-[11px] text-slate-400 truncate">Contabilidad & Finanzas</p>
+                </div>
+              )}
             </div>
+
+            {/* Mobile close button */}
             <button
               onClick={() => setIsMobileSidebarOpen(false)}
               className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
+
+            {/* Desktop collapse / expand button */}
+            {!isSidebarCollapsed && (
+              <button
+                type="button"
+                onClick={() => setIsSidebarCollapsed(true)}
+                className="hidden md:flex p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                title="Minimizar menú lateral (más espacio)"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           {/* Period & Year Selector */}
-          <div className="p-4 space-y-2.5 border-b border-slate-800/80 bg-slate-950/40">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Año / Ejercicio
-              </label>
+          {!isSidebarCollapsed ? (
+            <div className="p-3.5 md:p-4 space-y-2 border-b border-slate-800/80 bg-slate-950/40">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  Año / Ejercicio
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNewPeriodModalOpen(true)
+                    setIsMobileSidebarOpen(false)
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition cursor-pointer"
+                  title="Crear un nuevo período"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Nuevo</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500 font-bold cursor-pointer"
+                  >
+                    <option value="TODOS">Todos</option>
+                    {availableYears.map((y) => (
+                      <option key={y} value={y}>
+                        Año {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <select
+                    value={selectedMes}
+                    onChange={(e) => setSelectedMes(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                  >
+                    {filteredPeriods.length === 0 ? (
+                      <option value="">Sin períodos</option>
+                    ) : (
+                      filteredPeriods.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="hidden md:flex flex-col items-center py-2.5 border-b border-slate-800/80 bg-slate-950/40">
               <button
                 type="button"
-                onClick={() => {
-                  setIsNewPeriodModalOpen(true)
-                  setIsMobileSidebarOpen(false)
-                }}
-                className="flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition cursor-pointer"
-                title="Crear un nuevo período"
+                onClick={() => setIsSidebarCollapsed(false)}
+                className="px-2 py-1 rounded text-[10px] font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition text-center"
+                title={`Período activo: ${selectedMes} (Click para expandir)`}
               >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span>Nuevo</span>
+                {selectedMes.slice(0, 3)}
               </button>
             </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500 font-bold cursor-pointer"
-                >
-                  <option value="TODOS">Todos</option>
-                  {availableYears.map((y) => (
-                    <option key={y} value={y}>
-                      Año {y}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <select
-                  value={selectedMes}
-                  onChange={(e) => setSelectedMes(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
-                >
-                  {filteredPeriods.length === 0 ? (
-                    <option value="">Sin períodos</option>
-                  ) : (
-                    filteredPeriods.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-            </div>
-          </div>
+          )}
 
           {/* Navigation Links */}
-          <nav className="px-3 space-y-1 mt-2">
+          <nav className={`px-2 md:px-3 space-y-1.5 mt-3 ${isSidebarCollapsed ? 'md:px-2' : ''}`}>
             <button
               onClick={() => {
                 setActiveTab('cuentacorriente')
                 setIsMobileSidebarOpen(false)
                 setIsMobileCCDetailOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              title="Cuentas Corrientes"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'cuentacorriente'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <Wallet className="w-4 h-4 text-emerald-400" />
-              <span>Cuenta Corriente</span>
+              <Wallet className="w-4 h-4 text-emerald-400 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Cuenta Corriente</span>}
             </button>
 
             <button
@@ -1762,14 +1805,17 @@ export default function App() {
                 setActiveTab('libro')
                 setIsMobileSidebarOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              title="Libro Diario / Caja"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'libro'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <BookOpen className="w-4 h-4" />
-              Libro Diario / Caja
+              <BookOpen className="w-4 h-4 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Libro Diario / Caja</span>}
             </button>
 
             <button
@@ -1777,14 +1823,17 @@ export default function App() {
                 setActiveTab('dashboard')
                 setIsMobileSidebarOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              title="Dashboard & Balances"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'dashboard'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <LayoutDashboard className="w-4 h-4" />
-              Dashboard & Balances
+              <LayoutDashboard className="w-4 h-4 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Dashboard & Balances</span>}
             </button>
 
             <button
@@ -1792,14 +1841,17 @@ export default function App() {
                 setActiveTab('medicos')
                 setIsMobileSidebarOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              title="Honorarios Médicos"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'medicos'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <UserCheck className="w-4 h-4" />
-              Honorarios Médicos
+              <UserCheck className="w-4 h-4 shrink-0 text-indigo-400" />
+              {!isSidebarCollapsed && <span className="truncate">Honorarios Médicos</span>}
             </button>
 
             <button
@@ -1807,29 +1859,37 @@ export default function App() {
                 setActiveTab('maestros')
                 setIsMobileSidebarOpen(false)
               }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              title="Tablas Maestras"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer ${
                 activeTab === 'maestros'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <Layers className="w-4 h-4" />
-              Tablas Maestras
+              <Layers className="w-4 h-4 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Tablas Maestras</span>}
             </button>
           </nav>
         </div>
 
         {/* Footer info & Logout */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/50 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs">
+        <div className={`p-3 md:p-3.5 border-t border-slate-800 bg-slate-900/50 space-y-2.5 ${isSidebarCollapsed ? 'md:p-2.5' : ''}`}>
+          <div className={`flex items-center justify-between ${isSidebarCollapsed ? 'md:flex-col md:gap-2 md:items-center' : ''}`}>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-xs shrink-0"
+                title={currentUser?.email || currentUser?.nombre}
+              >
                 {currentUser?.nombre ? currentUser.nombre.charAt(0) : 'A'}
               </div>
-              <div className="overflow-hidden">
-                <p className="text-xs font-bold text-white truncate">{currentUser?.nombre}</p>
-                <p className="text-[10px] text-slate-400 truncate">{currentUser?.email}</p>
-              </div>
+              {!isSidebarCollapsed && (
+                <div className="overflow-hidden">
+                  <p className="text-xs font-bold text-white truncate">{currentUser?.nombre}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{currentUser?.email}</p>
+                </div>
+              )}
             </div>
 
             <button
@@ -1841,10 +1901,12 @@ export default function App() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>{entidadesCC.length} Cuentas activas</span>
-          </div>
+          {!isSidebarCollapsed && (
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>{entidadesCC.length} Cuentas activas</span>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -1852,7 +1914,8 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden print:overflow-visible print:block print:h-auto bg-slate-950">
         {/* TOP NAVBAR */}
         <header className="min-h-16 py-2.5 md:py-0 border-b border-slate-800 px-3 md:px-6 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/80 backdrop-blur-md shrink-0 z-30 print:hidden">
-          <div className="flex items-center gap-2.5 md:gap-4 min-w-0">
+          <div className="flex items-center gap-2.5 md:gap-3.5 min-w-0">
+            {/* Mobile menu button */}
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
@@ -1860,6 +1923,16 @@ export default function App() {
               title="Abrir menú"
             >
               <Menu className="w-5 h-5" />
+            </button>
+
+            {/* Desktop toggle button */}
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="hidden md:flex p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer"
+              title={isSidebarCollapsed ? 'Expandir barra lateral' : 'Minimizar barra lateral (más espacio)'}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen className="w-4 h-4 text-blue-400" /> : <PanelLeftClose className="w-4 h-4" />}
             </button>
 
             <div className="min-w-0">
