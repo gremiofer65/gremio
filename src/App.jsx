@@ -48,7 +48,10 @@ import {
   Landmark,
   Smartphone,
   Zap,
-  Sparkles
+  Sparkles,
+  Bell,
+  Clock,
+  AlertTriangle
 } from 'lucide-react'
 import {
   BarChart,
@@ -672,6 +675,7 @@ export default function App() {
   const [entitySearchFilter, setEntitySearchFilter] = useState('')
   const [isBankDropdownOpen, setIsBankDropdownOpen] = useState(false)
   const [bankSearchFilter, setBankSearchFilter] = useState('')
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   
   // Helper to obtain a fresh, blank form state for any modal type
   const getCleanFormData = useCallback((type = 'EGRESO') => ({
@@ -1197,6 +1201,106 @@ export default function App() {
   }, [movimientos, selectedMes])
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899']
+
+  // Cheque Alerts & Notifications (Vencimientos, En Período, Por Vencer)
+  const chequeAlerts = useMemo(() => {
+    const todayStr = getTodayLocalDate()
+    const today = new Date(todayStr + 'T00:00:00')
+    const alerts = []
+
+    movimientos.forEach((m) => {
+      const ref = m.chequeOperacion || ''
+      const upper = ref.toUpperCase()
+      const isCheque = upper.includes('CHEQUE') || upper.includes('CHQ') || upper.includes('ECHEQ')
+      if (!isCheque) return
+
+      // Extraer fecha de cobro/vencimiento si existe
+      let cobroDateStr = null
+      const cobroMatch = ref.match(/Cobro:?\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i)
+      if (cobroMatch) {
+        cobroDateStr = cobroMatch[1]
+      } else {
+        const slashMatch = ref.match(/Cobro:?\s*([0-9]{2})\/([0-9]{2})\/([0-9]{4})/i)
+        if (slashMatch) {
+          cobroDateStr = `${slashMatch[3]}-${slashMatch[2]}-${slashMatch[1]}`
+        }
+      }
+
+      // Si no tiene fecha de cobro específica, usamos la fecha del movimiento o de pago
+      const effectiveDateStr = cobroDateStr || (m.fechaPago ? String(m.fechaPago).slice(0, 10) : String(m.fecha).slice(0, 10))
+      if (!effectiveDateStr) return
+
+      const targetDate = new Date(effectiveDateStr + 'T00:00:00')
+      const diffTime = targetDate.getTime() - today.getTime()
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24))
+
+      const importe = Number(m.pagosS || m.netoPagadoMed || m.total || 0)
+      const entidad = m.empresaConcepto || 'Sin Especificar'
+      const isPagado = !!m.fechaPago
+
+      let status = 'AL_DIA' // 'VENCIDO' | 'HOY' | 'POR_VENCER' | 'EN_PERIODO' | 'FUTURO'
+      let severity = 'info' // 'danger' | 'warning' | 'today' | 'info'
+      let label = ''
+
+      if (diffDays < 0) {
+        status = 'VENCIDO'
+        severity = 'danger'
+        label = `Vencido hace ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'día' : 'días'}`
+      } else if (diffDays === 0) {
+        status = 'HOY'
+        severity = 'today'
+        label = 'Vence HOY'
+      } else if (diffDays <= 7) {
+        status = 'POR_VENCER'
+        severity = 'warning'
+        label = `Vence en ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`
+      } else if (m.mesPeriodo && selectedMes && m.mesPeriodo.trim() === selectedMes.trim()) {
+        status = 'EN_PERIODO'
+        severity = 'info'
+        label = `En período (${m.mesPeriodo})`
+      } else {
+        status = 'FUTURO'
+        severity = 'info'
+        label = `A cobrar/pagar el ${effectiveDateStr}`
+      }
+
+      alerts.push({
+        id: m.id,
+        movimiento: m,
+        entidad,
+        importe,
+        fechaCobro: effectiveDateStr,
+        diffDays,
+        status,
+        severity,
+        label,
+        isPagado,
+        chequeRef: ref,
+        tipo: upper.includes('TERCERO') ? 'Tercero' : 'Propio',
+        formato: upper.includes('ECHEQ') ? 'E-Cheq' : 'Físico',
+        rubro: m.rubro
+      })
+    })
+
+    // Ordenar: primero los más críticos (vencidos, hoy, próximos a vencer)
+    alerts.sort((a, b) => a.diffDays - b.diffDays)
+
+    const criticos = alerts.filter((a) => a.status === 'VENCIDO' || a.status === 'HOY' || a.status === 'POR_VENCER')
+    const vencidosCount = alerts.filter((a) => a.status === 'VENCIDO').length
+    const hoyCount = alerts.filter((a) => a.status === 'HOY').length
+    const porVencerCount = alerts.filter((a) => a.status === 'POR_VENCER').length
+    const enPeriodoCount = alerts.filter((a) => a.status === 'EN_PERIODO').length
+
+    return {
+      all: alerts,
+      criticos,
+      vencidosCount,
+      hoyCount,
+      porVencerCount,
+      enPeriodoCount,
+      totalAlertas: criticos.length
+    }
+  }, [movimientos, selectedMes])
 
   // Handle Form Change with Auto Calculations
   const handleInputChange = (field, value) => {
@@ -2121,6 +2225,124 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+            {/* NOTIFICACIONES DE CHEQUES / VENCIMIENTOS */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className={`relative p-2 rounded-lg border transition cursor-pointer flex items-center justify-center ${
+                  chequeAlerts.vencidosCount > 0
+                    ? 'bg-rose-500/10 border-rose-500/40 text-rose-400 hover:bg-rose-500/20 shadow-sm shadow-rose-950'
+                    : chequeAlerts.hoyCount > 0 || chequeAlerts.porVencerCount > 0
+                    ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 hover:bg-amber-500/20 shadow-sm shadow-amber-950'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                }`}
+                title="Notificaciones y Vencimientos de Cheques"
+              >
+                <Bell className="w-4 h-4" />
+                {chequeAlerts.totalAlertas > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white ring-2 ring-slate-900 animate-pulse">
+                    {chequeAlerts.totalAlertas}
+                  </span>
+                )}
+              </button>
+
+              {/* DROPDOWN DE NOTIFICACIONES */}
+              {isNotificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                  <div className="p-3.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-blue-400" />
+                      <h3 className="text-xs font-bold text-white">Vencimientos de Cheques</h3>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {chequeAlerts.vencidosCount > 0 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                          {chequeAlerts.vencidosCount} Vencidos
+                        </span>
+                      )}
+                      {chequeAlerts.porVencerCount > 0 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                          {chequeAlerts.porVencerCount} Próximos
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsNotificationsOpen(false)}
+                        className="p-1 text-slate-400 hover:text-white rounded ml-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/60 custom-scrollbar p-1">
+                    {chequeAlerts.all.length === 0 ? (
+                      <div className="py-8 text-center text-slate-500 text-xs">
+                        <CheckCircle2 className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-emerald-400" />
+                        No hay cheques registrados en el sistema.
+                      </div>
+                    ) : (
+                      chequeAlerts.all.map((item) => {
+                        const isVencido = item.status === 'VENCIDO'
+                        const isHoy = item.status === 'HOY'
+                        const isPorVencer = item.status === 'POR_VENCER'
+
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => {
+                              setIsNotificationsOpen(false)
+                              handleOpenEditModal(item.movimiento)
+                            }}
+                            className="p-2.5 hover:bg-slate-800/60 rounded-xl transition cursor-pointer space-y-1"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-xs text-white truncate">
+                                {item.entidad}
+                              </span>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap ${
+                                  isVencido
+                                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                                    : isHoy
+                                    ? 'bg-red-500 text-white font-extrabold border-red-400 animate-pulse'
+                                    : isPorVencer
+                                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                                    : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                }`}
+                              >
+                                {item.label}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] text-slate-400">
+                              <span className="truncate text-slate-300 font-mono text-[10px]">
+                                {item.formato} • {item.tipo}
+                              </span>
+                              <span className="font-mono font-bold text-white">
+                                {fmtMoney(item.importe)}
+                              </span>
+                            </div>
+
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {item.chequeRef}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+
+                  {chequeAlerts.all.length > 0 && (
+                    <div className="p-2.5 bg-slate-950 text-center border-t border-slate-800 text-[11px] text-slate-400">
+                      Haz clic en cualquier cheque para ver o editar su estado de pago.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => handleOpenCreateModal('EGRESO')}
               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
@@ -2152,6 +2374,40 @@ export default function App() {
 
         {/* VIEW CONTAINER */}
         <div className="flex-1 overflow-y-auto print:overflow-visible print:block print:h-auto print:p-0 print:m-0 print:space-y-0 p-3 sm:p-5 lg:p-6 space-y-4 md:space-y-6">
+          {/* BANNER DE ALERTA DE VENCIMIENTOS DE CHEQUES SI CORRESPONDE */}
+          {chequeAlerts.criticos.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/40 rounded-2xl p-3 sm:p-4 shadow-lg flex flex-wrap items-center justify-between gap-3 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                    <span>Atención: Hay cheques con vencimiento próximo o vencidos</span>
+                    {chequeAlerts.vencidosCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                        {chequeAlerts.vencidosCount} Vencidos
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-[11px] text-slate-300">
+                    {chequeAlerts.criticos.map((c) => `${c.entidad} (${c.label})`).slice(0, 2).join(' • ')}
+                    {chequeAlerts.criticos.length > 2 && ` y ${chequeAlerts.criticos.length - 2} más...`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationsOpen(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition cursor-pointer shadow"
+                >
+                  Ver Todos los Cheques
+                </button>
+              </div>
+            </div>
+          )}
           {/* TAB 1: CUENTA CORRIENTE */}
           {activeTab === 'cuentacorriente' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start print:block print:w-full">
