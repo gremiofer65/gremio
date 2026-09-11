@@ -586,20 +586,22 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRubro, setSelectedRubro] = useState('TODOS')
   const [selectedSede, setSelectedSede] = useState('TODAS')
+  const [medicosPagoFilter, setMedicosPagoFilter] = useState('TODOS') // 'TODOS' | 'PENDIENTES' | 'PAGADOS'
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalType, setModalType] = useState('EGRESO') // 'EGRESO' | 'MEDICO' | 'INGRESO'
+  const [editingId, setEditingId] = useState(null)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [entitySearchFilter, setEntitySearchFilter] = useState('')
   
-  // Form State
-  const [formData, setFormData] = useState({
+  // Helper to obtain a fresh, blank form state for any modal type
+  const getCleanFormData = useCallback((type = 'EGRESO') => ({
     fecha: new Date().toISOString().split('T')[0],
     facturaNro: '',
-    rubro: 'PROVEEDOR',
+    rubro: type === 'MEDICO' ? 'MÉDICO' : type === 'INGRESO' ? 'INGRESOS' : 'PROVEEDOR',
     empresaConcepto: '',
-    detalle: 'Gastos Generales',
+    detalle: '',
     detalleExtenso: '',
     realizadoEn: 'Policlinica AMOS',
     fechaPago: '',
@@ -627,7 +629,10 @@ export default function App() {
     otIngresos: '',
     compensaciones: '',
     observaciones: ''
-  })
+  }), [])
+
+  // Form State (siempre limpio)
+  const [formData, setFormData] = useState(() => getCleanFormData('EGRESO'))
 
   // Format money helper
   const fmtMoney = (val) => {
@@ -846,6 +851,8 @@ export default function App() {
         sumDebito += debito
         rows.push({
           id: `${m.id}-dev`,
+          movimientoOriginal: m,
+          isPagoRow: false,
           fecha: m.fecha,
           comprobante,
           tipoComprobante: 'Factura / Liquidación Honorario',
@@ -862,6 +869,8 @@ export default function App() {
           sumCredito += credito
           rows.push({
             id: `${m.id}-pago`,
+            movimientoOriginal: m,
+            isPagoRow: true,
             fecha: m.fechaPago,
             comprobante: m.chequeOperacion || 'OP-TRANSF',
             tipoComprobante: 'Orden de Pago / Cheque',
@@ -879,6 +888,8 @@ export default function App() {
         sumDebito += debito
         rows.push({
           id: `${m.id}-ing`,
+          movimientoOriginal: m,
+          isPagoRow: false,
           fecha: m.fecha,
           comprobante,
           tipoComprobante: 'Recibo de Ingreso',
@@ -895,6 +906,8 @@ export default function App() {
         sumDebito += debito
         rows.push({
           id: `${m.id}-fac`,
+          movimientoOriginal: m,
+          isPagoRow: false,
           fecha: m.fecha,
           comprobante,
           tipoComprobante: 'Factura / Comprobante de Compra',
@@ -911,6 +924,8 @@ export default function App() {
           sumCredito += credito
           rows.push({
             id: `${m.id}-pago`,
+            movimientoOriginal: m,
+            isPagoRow: true,
             fecha: m.fechaPago,
             comprobante: m.chequeOperacion || 'OP-PAGO',
             tipoComprobante: 'Orden de Pago / Comprobante de Cancelación',
@@ -967,14 +982,28 @@ export default function App() {
     document.body.removeChild(link)
   }
 
-  // Medical Liquidation Summary
-  const medicosData = useMemo(() => {
-    return movimientos.filter((m) => {
+  // Medical Liquidation Summary & Counts
+  const medicosCounts = useMemo(() => {
+    const medMovs = movimientos.filter((m) => {
       if (m.rubro !== 'MÉDICO') return false
       if (selectedMes && m.mesPeriodo && m.mesPeriodo.trim() !== selectedMes.trim()) return false
       return true
     })
+    const total = medMovs.length
+    const pendientes = medMovs.filter((m) => !m.fechaPago).length
+    const pagados = medMovs.filter((m) => !!m.fechaPago).length
+    return { total, pendientes, pagados }
   }, [movimientos, selectedMes])
+
+  const medicosData = useMemo(() => {
+    return movimientos.filter((m) => {
+      if (m.rubro !== 'MÉDICO') return false
+      if (selectedMes && m.mesPeriodo && m.mesPeriodo.trim() !== selectedMes.trim()) return false
+      if (medicosPagoFilter === 'PENDIENTES' && m.fechaPago) return false
+      if (medicosPagoFilter === 'PAGADOS' && !m.fechaPago) return false
+      return true
+    })
+  }, [movimientos, selectedMes, medicosPagoFilter])
 
   // Chart Data: Egresos by Rubro
   const egresosPorRubroData = useMemo(() => {
@@ -1107,27 +1136,217 @@ export default function App() {
     })
   }
 
-  // Handle Create Movement
-  const handleSaveMovement = (e) => {
-    e.preventDefault()
+  // Close modal and reset form completely
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setEditingId(null)
+    setIsDropdownOpen(false)
+    setEntitySearchFilter('')
+    setFormData(getCleanFormData(modalType))
+  }
 
-    const targetEmpresa = formData.empresaConcepto ? formData.empresaConcepto.trim().toLowerCase() : ''
-    const targetFactura = formData.facturaNro ? formData.facturaNro.trim().toLowerCase() : ''
+  // Open modal for new creation (siempre 100% limpio y sin datos residuales)
+  const handleOpenCreateModal = (type = 'EGRESO') => {
+    setEditingId(null)
+    setModalType(type)
+    setIsDropdownOpen(false)
+    setEntitySearchFilter('')
+    setFormData(getCleanFormData(type))
+    setIsModalOpen(true)
+  }
 
-    // Validar duplicados si se ingresó número de factura
-    if (targetFactura && targetFactura !== '-' && targetFactura !== '') {
-      const duplicate = movimientos.find((m) => {
+  // Open modal for editing an existing movement
+  const handleOpenEditModal = (mov) => {
+    if (!mov) return
+    setEditingId(mov.id)
+
+    const type = mov.rubro === 'MÉDICO' ? 'MEDICO' : mov.rubro === 'INGRESOS' ? 'INGRESO' : 'EGRESO'
+    setModalType(type)
+    setIsDropdownOpen(false)
+    setEntitySearchFilter('')
+
+    const retMed = Number(mov.retencionesMed || 0)
+    const pagMed = Number(mov.pagosMed || 0)
+    const hasRet = retMed > 0
+    const pctRet = hasRet && pagMed > 0 ? Number(((retMed / pagMed) * 100).toFixed(0)) : 5
+
+    setFormData({
+      fecha: mov.fecha ? String(mov.fecha).slice(0, 10) : new Date().toISOString().split('T')[0],
+      facturaNro: mov.facturaNro || '',
+      rubro: mov.rubro || 'PROVEEDOR',
+      empresaConcepto: mov.empresaConcepto || '',
+      detalle: mov.detalle || '',
+      detalleExtenso: mov.detalleExtenso || '',
+      realizadoEn: mov.realizadoEn || 'Policlinica AMOS',
+      fechaPago: mov.fechaPago ? String(mov.fechaPago).slice(0, 10) : '',
+      chequeOperacion: mov.chequeOperacion || '',
+      pagosS: mov.pagosS ? String(mov.pagosS) : '',
+      pagosMed: mov.pagosMed ? String(mov.pagosMed) : '',
+      aplicarRetencion: hasRet,
+      porcentajeRetencion: pctRet,
+      retencionesMed: mov.retencionesMed ? String(mov.retencionesMed) : '',
+      netoPagadoMed: mov.netoPagadoMed ? String(mov.netoPagadoMed) : '',
+      ingresosCFL: mov.ingresosCFL ? String(mov.ingresosCFL) : '',
+      ingresosCENS: mov.ingresosCENS ? String(mov.ingresosCENS) : '',
+      ingresosBilleteras: mov.ingresosBilleteras ? String(mov.ingresosBilleteras) : '',
+      alquiConsultorios: mov.alquiConsultorios ? String(mov.alquiConsultorios) : '',
+      alquilerCpoSalon: mov.alquilerCpoSalon ? String(mov.alquilerCpoSalon) : '',
+      ventaCantina: mov.ventaCantina ? String(mov.ventaCantina) : '',
+      usoNatatorio: mov.usoNatatorio ? String(mov.usoNatatorio) : '',
+      practicas: mov.practicas ? String(mov.practicas) : '',
+      consultas: mov.consultas ? String(mov.consultas) : '',
+      enfermeria: mov.enfermeria ? String(mov.enfermeria) : '',
+      odontologia: mov.odontologia ? String(mov.odontologia) : '',
+      otIngresos: mov.otIngresos ? String(mov.otIngresos) : '',
+      compensaciones: mov.compensaciones ? String(mov.compensaciones) : '',
+      observaciones: mov.observaciones || ''
+    })
+    setIsModalOpen(true)
+  }
+
+  // Handle Delete Movement
+  const handleDeleteMovement = async () => {
+    if (!editingId) return
+    const confirmDelete = window.confirm(
+      '¿Estás seguro de que deseas ELIMINAR este movimiento permanentemente? Esta acción eliminará el registro de la cuenta corriente y del libro diario.'
+    )
+    if (!confirmDelete) return
+
+    const idToDelete = editingId
+    setMovimientos((prev) => prev.filter((m) => m.id !== idToDelete))
+    handleCloseModal()
+
+    try {
+      const { error } = await supabase.from('movimientos').delete().eq('id', idToDelete)
+      if (error) {
+        console.error('Error eliminando movimiento en Supabase:', error.message)
+        alert('Error al eliminar en Supabase: ' + error.message)
+      }
+    } catch (err) {
+      console.error('Error al conectar con Supabase:', err)
+    }
+  }
+
+  // Handle Anular Movement (Void invoice / reset amounts to 0 with audit trail)
+  const handleAnularMovement = async () => {
+    if (!editingId) return
+    const confirmAnular = window.confirm(
+      '¿Deseas ANULAR este comprobante? Los importes se pondrán en $0 y se marcará como [ANULADO] en el concepto para mantener constancia contable sin alterar el saldo.'
+    )
+    if (!confirmAnular) return
+
+    const idToVoid = editingId
+    const currentMov = movimientos.find((m) => m.id === idToVoid)
+    if (!currentMov) return
+
+    const voidedDetalle = formData.detalle?.startsWith('[ANULADO]')
+      ? formData.detalle
+      : `[ANULADO] ${formData.detalle || ''}`.trim()
+    const voidedObs = `Comprobante anulado el ${new Date().toLocaleDateString('es-AR')}. ${formData.observaciones || ''}`.trim()
+
+    const updatedMov = {
+      ...currentMov,
+      detalle: voidedDetalle,
+      observaciones: voidedObs,
+      pagosS: 0,
+      pagosMed: 0,
+      retencionesMed: 0,
+      netoPagadoMed: 0,
+      total: 0,
+      ingresosCFL: 0,
+      ingresosCENS: 0,
+      ingresosBilleteras: 0,
+      alquiConsultorios: 0,
+      alquilerCpoSalon: 0,
+      ventaCantina: 0,
+      usoNatatorio: 0,
+      practicas: 0,
+      consultas: 0,
+      enfermeria: 0,
+      odontologia: 0,
+      otIngresos: 0,
+      compensaciones: 0,
+      fechaPago: null,
+      chequeOperacion: null
+    }
+
+    setMovimientos((prev) => prev.map((m) => (m.id === idToVoid ? updatedMov : m)))
+    handleCloseModal()
+
+    try {
+      const { error } = await supabase
+        .from('movimientos')
+        .update({
+          detalle: voidedDetalle,
+          observaciones: voidedObs,
+          pagos_s: 0,
+          pagos_med: 0,
+          retenciones_med: 0,
+          neto_pagado_med: 0,
+          total: 0,
+          alquiler_cpo_salon: 0,
+          venta_cantina: 0,
+          uso_natatorio: 0,
+          alqui_consultorios: 0,
+          practicas: 0,
+          consultas: 0,
+          enfermeria: 0,
+          odontologia: 0,
+          ot_ingresos: 0,
+          compensaciones: 0,
+          fecha_pago: null,
+          cheque_operacion: null
+        })
+        .eq('id', idToVoid)
+
+      if (error) {
+        console.error('Error anulando comprobante en Supabase:', error.message)
+      }
+    } catch (err) {
+      console.error('Error al anular movimiento en Supabase:', err)
+    }
+  }
+
+  // Detección proactiva de comprobantes duplicados en tiempo real
+  const duplicateVoucher = useMemo(() => {
+    const rawFactura = formData.facturaNro ? String(formData.facturaNro).trim().toLowerCase() : ''
+    if (!rawFactura || rawFactura === '-' || rawFactura === '0' || rawFactura === '0000') return null
+
+    const rawEmpresa = formData.empresaConcepto ? String(formData.empresaConcepto).trim().toLowerCase() : ''
+
+    // 1. Coincidencia exacta (Factura Nº + Titular/Empresa)
+    if (rawEmpresa) {
+      const exact = movimientos.find((m) => {
+        if (editingId && m.id === editingId) return false
         const mFactura = m.facturaNro ? String(m.facturaNro).trim().toLowerCase() : ''
         const mEmpresa = m.empresaConcepto ? String(m.empresaConcepto).trim().toLowerCase() : ''
-        return mFactura === targetFactura && mEmpresa === targetEmpresa
+        return mFactura === rawFactura && mEmpresa === rawEmpresa
       })
+      if (exact) return { ...exact, matchType: 'EXACT' }
+    }
 
-      if (duplicate) {
-        alert(
-          `⚠️ FACTURA DUPLICADA:\n\nYa existe un comprobante con el Nº "${formData.facturaNro}" para "${formData.empresaConcepto}".\n\nFecha registrada: ${duplicate.fecha}\nDetalle: ${duplicate.detalle || '-'}\nImporte: ${fmtMoney(duplicate.pagosS || duplicate.netoPagadoMed || duplicate.total)}\n\nPor favor verifica el número o proveedor antes de continuar.`
-        )
-        return
-      }
+    // 2. Coincidencia de Nº de comprobante con otro emisor
+    const matchNumber = movimientos.find((m) => {
+      if (editingId && m.id === editingId) return false
+      const mFactura = m.facturaNro ? String(m.facturaNro).trim().toLowerCase() : ''
+      return mFactura === rawFactura
+    })
+
+    if (matchNumber) return { ...matchNumber, matchType: 'NUMBER_ONLY' }
+
+    return null
+  }, [formData.facturaNro, formData.empresaConcepto, movimientos, editingId])
+
+  // Handle Save / Update Movement
+  const handleSaveMovement = async (e) => {
+    e.preventDefault()
+
+    // Validar duplicados si se detecta coincidencia exacta
+    if (duplicateVoucher && duplicateVoucher.matchType === 'EXACT') {
+      const proceed = window.confirm(
+        `⚠️ COMPROBANTE YA EXISTE:\n\nYa existe un comprobante con el Nº "${formData.facturaNro}" registrado para "${formData.empresaConcepto}".\n\nFecha registrada: ${duplicateVoucher.fecha}\nDetalle: ${duplicateVoucher.detalle || '-'}\nImporte: ${fmtMoney(duplicateVoucher.pagosS || duplicateVoucher.netoPagadoMed || duplicateVoucher.total)}\n\n¿Deseas guardarlo como duplicado de todas formas?`
+      )
+      if (!proceed) return
     }
 
     let totalIngresosCalculado = 0
@@ -1148,79 +1367,166 @@ export default function App() {
         Number(formData.compensaciones || 0)
     }
 
-    const newMov = {
-      id: 'mov-' + (movimientos.length + 1),
-      fecha: formData.fecha,
-      facturaNro: formData.facturaNro,
-      rubro: modalType === 'MEDICO' ? 'MÉDICO' : modalType === 'INGRESO' ? 'INGRESOS' : formData.rubro,
-      empresaConcepto: formData.empresaConcepto || (modalType === 'INGRESO' ? 'Ingresos Varios' : ''),
-      detalle: formData.detalle,
-      detalleExtenso: formData.detalleExtenso,
-      realizadoEn: formData.realizadoEn || 'Policlinica AMOS',
-      fechaPago: formData.fechaPago,
-      chequeOperacion: formData.chequeOperacion,
-      mesPeriodo: selectedMes,
-      pagosS: modalType === 'EGRESO' ? Number(formData.pagosS || 0) : 0,
-      pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
-      retencionesMed: modalType === 'MEDICO' ? Number(formData.retencionesMed || 0) : 0,
-      netoPagadoMed: modalType === 'MEDICO' ? Number(formData.netoPagadoMed || 0) : 0,
-      ingresosCFL: Number(formData.ingresosCFL || 0),
-      ingresosCENS: Number(formData.ingresosCENS || 0),
-      ingresosBilleteras: Number(formData.ingresosBilleteras || 0),
-      alquiConsultorios: Number(formData.alquiConsultorios || 0),
-      alquilerCpoSalon: Number(formData.alquilerCpoSalon || 0),
-      ventaCantina: Number(formData.ventaCantina || 0),
-      usoNatatorio: Number(formData.usoNatatorio || 0),
-      practicas: Number(formData.practicas || 0),
-      consultas: Number(formData.consultas || 0),
-      enfermeria: Number(formData.enfermeria || 0),
-      odontologia: Number(formData.odontologia || 0),
-      otIngresos: Number(formData.otIngresos || 0),
-      compensaciones: Number(formData.compensaciones || 0),
-      total: totalIngresosCalculado,
-      observaciones: formData.observaciones
-    }
+    if (editingId) {
+      // 1. MODO EDICIÓN / MODIFICAR
+      const currentMov = movimientos.find((m) => m.id === editingId) || {}
+      const updatedMov = {
+        ...currentMov,
+        fecha: formData.fecha,
+        facturaNro: formData.facturaNro,
+        rubro: modalType === 'MEDICO' ? 'MÉDICO' : modalType === 'INGRESO' ? 'INGRESOS' : formData.rubro,
+        empresaConcepto: formData.empresaConcepto || (modalType === 'INGRESO' ? 'Ingresos Varios' : ''),
+        detalle: formData.detalle,
+        detalleExtenso: formData.detalleExtenso,
+        realizadoEn: formData.realizadoEn || 'Policlinica AMOS',
+        fechaPago: formData.fechaPago || null,
+        chequeOperacion: formData.chequeOperacion || null,
+        pagosS: modalType === 'EGRESO' ? Number(formData.pagosS || 0) : 0,
+        pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
+        retencionesMed: modalType === 'MEDICO' ? Number(formData.retencionesMed || 0) : 0,
+        netoPagadoMed: modalType === 'MEDICO' ? Number(formData.netoPagadoMed || 0) : 0,
+        ingresosCFL: Number(formData.ingresosCFL || 0),
+        ingresosCENS: Number(formData.ingresosCENS || 0),
+        ingresosBilleteras: Number(formData.ingresosBilleteras || 0),
+        alquiConsultorios: Number(formData.alquiConsultorios || 0),
+        alquilerCpoSalon: Number(formData.alquilerCpoSalon || 0),
+        ventaCantina: Number(formData.ventaCantina || 0),
+        usoNatatorio: Number(formData.usoNatatorio || 0),
+        practicas: Number(formData.practicas || 0),
+        consultas: Number(formData.consultas || 0),
+        enfermeria: Number(formData.enfermeria || 0),
+        odontologia: Number(formData.odontologia || 0),
+        otIngresos: Number(formData.otIngresos || 0),
+        compensaciones: Number(formData.compensaciones || 0),
+        total: totalIngresosCalculado,
+        observaciones: formData.observaciones
+      }
 
-    setMovimientos([newMov, ...movimientos])
-    setIsModalOpen(false)
+      setMovimientos((prev) => prev.map((m) => (m.id === editingId ? updatedMov : m)))
+      handleCloseModal()
 
-    // Persistir en Supabase
-    try {
-      supabase.from('movimientos').insert([
-        {
-          fecha: newMov.fecha,
-          factura_nro: newMov.facturaNro || null,
-          rubro: newMov.rubro,
-          empresa_concepto: newMov.empresaConcepto,
-          detalle: newMov.detalle || null,
-          detalle_extenso: newMov.detalleExtenso || null,
-          realizado_en: newMov.realizadoEn || null,
-          fecha_pago: newMov.fechaPago || null,
-          cheque_operacion: newMov.chequeOperacion || null,
-          mes_periodo: newMov.mesPeriodo || null,
-          pagos_s: newMov.pagosS,
-          ingresos_s: newMov.ingresosS || 0,
-          pagos_med: newMov.pagosMed,
-          retenciones_med: newMov.retencionesMed,
-          neto_pagado_med: newMov.netoPagadoMed,
-          alquiler_cpo_salon: newMov.alquilerCpoSalon,
-          venta_cantina: newMov.ventaCantina,
-          uso_natatorio: newMov.usoNatatorio,
-          alqui_consultorios: newMov.alquiConsultorios,
-          practicas: newMov.practicas,
-          consultas: newMov.consultas,
-          enfermeria: newMov.enfermeria,
-          odontologia: newMov.odontologia,
-          ot_ingresos: newMov.otIngresos,
-          compensaciones: newMov.compensaciones,
-          total: newMov.total,
-          observaciones: newMov.observaciones || null
+      try {
+        const { error } = await supabase
+          .from('movimientos')
+          .update({
+            fecha: updatedMov.fecha,
+            factura_nro: updatedMov.facturaNro || null,
+            rubro: updatedMov.rubro,
+            empresa_concepto: updatedMov.empresaConcepto,
+            detalle: updatedMov.detalle || null,
+            detalle_extenso: updatedMov.detalleExtenso || null,
+            realizado_en: updatedMov.realizadoEn || null,
+            fecha_pago: updatedMov.fechaPago || null,
+            cheque_operacion: updatedMov.chequeOperacion || null,
+            pagos_s: updatedMov.pagosS,
+            ingresos_s: updatedMov.ingresosS || 0,
+            pagos_med: updatedMov.pagosMed,
+            retenciones_med: updatedMov.retencionesMed,
+            neto_pagado_med: updatedMov.netoPagadoMed,
+            alquiler_cpo_salon: updatedMov.alquilerCpoSalon,
+            venta_cantina: updatedMov.ventaCantina,
+            uso_natatorio: updatedMov.usoNatatorio,
+            alqui_consultorios: updatedMov.alquiConsultorios,
+            practicas: updatedMov.practicas,
+            consultas: updatedMov.consultas,
+            enfermeria: updatedMov.enfermeria,
+            odontologia: updatedMov.odontologia,
+            ot_ingresos: updatedMov.otIngresos,
+            compensaciones: updatedMov.compensaciones,
+            total: updatedMov.total,
+            observaciones: updatedMov.observaciones || null
+          })
+          .eq('id', editingId)
+
+        if (error) console.error('Error actualizando movimiento en Supabase:', error.message)
+      } catch (err) {
+        console.error('Error enviando actualización a Supabase:', err)
+      }
+    } else {
+      // 2. MODO CREACIÓN
+      const newMov = {
+        id: 'mov-' + Date.now(),
+        fecha: formData.fecha,
+        facturaNro: formData.facturaNro,
+        rubro: modalType === 'MEDICO' ? 'MÉDICO' : modalType === 'INGRESO' ? 'INGRESOS' : formData.rubro,
+        empresaConcepto: formData.empresaConcepto || (modalType === 'INGRESO' ? 'Ingresos Varios' : ''),
+        detalle: formData.detalle,
+        detalleExtenso: formData.detalleExtenso,
+        realizadoEn: formData.realizadoEn || 'Policlinica AMOS',
+        fechaPago: formData.fechaPago || null,
+        chequeOperacion: formData.chequeOperacion || null,
+        mesPeriodo: selectedMes,
+        pagosS: modalType === 'EGRESO' ? Number(formData.pagosS || 0) : 0,
+        pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
+        retencionesMed: modalType === 'MEDICO' ? Number(formData.retencionesMed || 0) : 0,
+        netoPagadoMed: modalType === 'MEDICO' ? Number(formData.netoPagadoMed || 0) : 0,
+        ingresosCFL: Number(formData.ingresosCFL || 0),
+        ingresosCENS: Number(formData.ingresosCENS || 0),
+        ingresosBilleteras: Number(formData.ingresosBilleteras || 0),
+        alquiConsultorios: Number(formData.alquiConsultorios || 0),
+        alquilerCpoSalon: Number(formData.alquilerCpoSalon || 0),
+        ventaCantina: Number(formData.ventaCantina || 0),
+        usoNatatorio: Number(formData.usoNatatorio || 0),
+        practicas: Number(formData.practicas || 0),
+        consultas: Number(formData.consultas || 0),
+        enfermeria: Number(formData.enfermeria || 0),
+        odontologia: Number(formData.odontologia || 0),
+        otIngresos: Number(formData.otIngresos || 0),
+        compensaciones: Number(formData.compensaciones || 0),
+        total: totalIngresosCalculado,
+        observaciones: formData.observaciones
+      }
+
+      setMovimientos([newMov, ...movimientos])
+      handleCloseModal()
+
+      try {
+        const { data: insertedData, error } = await supabase
+          .from('movimientos')
+          .insert([
+            {
+              fecha: newMov.fecha,
+              factura_nro: newMov.facturaNro || null,
+              rubro: newMov.rubro,
+              empresa_concepto: newMov.empresaConcepto,
+              detalle: newMov.detalle || null,
+              detalle_extenso: newMov.detalleExtenso || null,
+              realizado_en: newMov.realizadoEn || null,
+              fecha_pago: newMov.fechaPago || null,
+              cheque_operacion: newMov.chequeOperacion || null,
+              mes_periodo: newMov.mesPeriodo || null,
+              pagos_s: newMov.pagosS,
+              ingresos_s: newMov.ingresosS || 0,
+              pagos_med: newMov.pagosMed,
+              retenciones_med: newMov.retencionesMed,
+              neto_pagado_med: newMov.netoPagadoMed,
+              alquiler_cpo_salon: newMov.alquilerCpoSalon,
+              venta_cantina: newMov.ventaCantina,
+              uso_natatorio: newMov.usoNatatorio,
+              alqui_consultorios: newMov.alquiConsultorios,
+              practicas: newMov.practicas,
+              consultas: newMov.consultas,
+              enfermeria: newMov.enfermeria,
+              odontologia: newMov.odontologia,
+              ot_ingresos: newMov.otIngresos,
+              compensaciones: newMov.compensaciones,
+              total: newMov.total,
+              observaciones: newMov.observaciones || null
+            }
+          ])
+          .select()
+
+        if (error) {
+          console.error('Error insertando movimiento en Supabase:', error.message)
+        } else if (insertedData && insertedData[0]?.id) {
+          // Reemplazar id provisional con el UUID generado por Supabase
+          setMovimientos((prev) =>
+            prev.map((m) => (m.id === newMov.id ? { ...m, id: insertedData[0].id } : m))
+          )
         }
-      ]).then(({ error }) => {
-        if (error) console.error('Error insertando movimiento en Supabase:', error.message)
-      })
-    } catch (err) {
-      console.error('Error enviando movimiento a Supabase:', err)
+      } catch (err) {
+        console.error('Error enviando movimiento a Supabase:', err)
+      }
     }
   }
 
@@ -1564,22 +1870,16 @@ export default function App() {
 
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
             <button
-              onClick={() => {
-                setModalType('EGRESO')
-                setIsModalOpen(true)
-              }}
+              onClick={() => handleOpenCreateModal('EGRESO')}
               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
-              title="Cargar Gasto / Pago"
+              title="Cargar Gasto / Factura"
             >
               <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
               <span className="hidden sm:inline">Cargar</span> Gasto
             </button>
 
             <button
-              onClick={() => {
-                setModalType('MEDICO')
-                setIsModalOpen(true)
-              }}
+              onClick={() => handleOpenCreateModal('MEDICO')}
               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
               title="Cargar Honorario Médico"
             >
@@ -1588,10 +1888,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => {
-                setModalType('INGRESO')
-                setIsModalOpen(true)
-              }}
+              onClick={() => handleOpenCreateModal('INGRESO')}
               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition cursor-pointer"
               title="Nuevo Ingreso"
             >
@@ -1605,7 +1902,7 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4 md:space-y-6">
           {/* TAB 1: CUENTA CORRIENTE */}
           {activeTab === 'cuentacorriente' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 min-h-[calc(100vh-140px)]">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
               {/* LEFT COLUMN: ENTITIES SELECTOR */}
               <div
                 className={`lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl ${
@@ -1674,7 +1971,7 @@ export default function App() {
                 </div>
 
                 {/* Entity List */}
-                <div className="flex-1 max-h-[60vh] lg:max-h-none overflow-y-auto divide-y divide-slate-800/60 p-2 space-y-1">
+                <div className="max-h-[60vh] lg:max-h-[calc(100vh-250px)] overflow-y-auto divide-y divide-slate-800/60 p-2 space-y-1">
                   {filteredEntidades.map((ent) => {
                     const isSelected = selectedEntity === ent.nombre
 
@@ -1916,8 +2213,14 @@ export default function App() {
                 )}
 
                 {/* Table of Ledger Entries */}
-                <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[65vh] lg:max-h-none">
-                  <table className="w-full text-left text-xs border-collapse min-w-[650px]">
+                <div className="p-3 bg-slate-950/40 border-b border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                  <span className="flex items-center gap-1.5 text-blue-400 font-medium">
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Haz clic en cualquier comprobante o pago para modificarlo, registrar pago, anularlo o eliminarlo.
+                  </span>
+                </div>
+                <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
+                  <table className="w-full text-left text-xs border-collapse min-w-[700px]">
                     <thead className="bg-slate-950/80 sticky top-0 z-10 backdrop-blur border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
                       <tr>
                         <th className="py-3 px-4">Fecha</th>
@@ -1927,12 +2230,13 @@ export default function App() {
                         <th className="py-3 px-3 text-right text-rose-400 font-bold">DÉBITO (+)</th>
                         <th className="py-3 px-3 text-right text-emerald-400 font-bold">CRÉDITO (-)</th>
                         <th className="py-3 px-4 text-right text-blue-400 font-extrabold">SALDO</th>
+                        <th className="py-3 px-3 text-center w-16">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {extractoCuenta.movimientos.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-16 text-center text-slate-500">
+                          <td colSpan={8} className="py-16 text-center text-slate-500">
                             <History className="w-8 h-8 mx-auto mb-2 opacity-40" />
                             No hay movimientos registrados para esta cuenta en el período activo.
                           </td>
@@ -1943,9 +2247,16 @@ export default function App() {
                           const isCredito = row.credito > 0
 
                           return (
-                            <tr key={row.id} className="hover:bg-slate-800/40 transition">
-                              <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{row.fecha}</td>
-                              <td className="py-3 px-3 font-mono text-slate-300 font-semibold whitespace-nowrap">
+                            <tr
+                              key={row.id}
+                              onClick={() => handleOpenEditModal(row.movimientoOriginal)}
+                              className="hover:bg-blue-600/10 active:bg-blue-600/20 transition cursor-pointer group"
+                              title="Haz clic para modificar, registrar pago, anular o eliminar este movimiento"
+                            >
+                              <td className="py-3 px-4 text-slate-300 whitespace-nowrap group-hover:text-blue-300 transition">
+                                {row.fecha}
+                              </td>
+                              <td className="py-3 px-3 font-mono text-slate-300 font-semibold whitespace-nowrap group-hover:text-blue-200">
                                 {row.comprobante}
                               </td>
                               <td className="py-3 px-3 whitespace-nowrap">
@@ -1959,7 +2270,7 @@ export default function App() {
                                   {row.tipoComprobante}
                                 </span>
                               </td>
-                              <td className="py-3 px-4 text-slate-300 max-w-[240px] truncate">
+                              <td className="py-3 px-4 text-slate-300 max-w-[240px] truncate group-hover:text-slate-100">
                                 <div>{row.detalle}</div>
                                 {row.referencia && (
                                   <span className="text-[10px] text-slate-500">{row.referencia}</span>
@@ -1974,11 +2285,42 @@ export default function App() {
                               <td className="py-3 px-4 text-right font-mono font-bold text-white whitespace-nowrap bg-slate-950/30">
                                 {fmtMoney(row.saldo)}
                               </td>
+                              <td className="py-3 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditModal(row.movimientoOriginal)}
+                                  className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-blue-600 text-slate-400 hover:text-white transition cursor-pointer"
+                                  title="Editar / Gestionar comprobante"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
                             </tr>
                           )
                         })
                       )}
                     </tbody>
+                    {extractoCuenta.movimientos.length > 0 && (
+                      <tfoot className="bg-slate-950 border-t-2 border-slate-700 font-bold text-xs sticky bottom-0 z-10 shadow-lg">
+                        <tr>
+                          <td colSpan={4} className="py-3 px-4 text-slate-300 uppercase tracking-wider">
+                            Total General
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-rose-400 whitespace-nowrap">
+                            {fmtMoney(extractoCuenta.totalDebito)}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-emerald-400 whitespace-nowrap">
+                            {fmtMoney(extractoCuenta.totalCredito)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-white whitespace-nowrap bg-slate-900/80">
+                            <span className={extractoCuenta.saldoFinal === 0 ? 'text-emerald-400' : 'text-amber-400'}>
+                              {fmtMoney(extractoCuenta.saldoFinal)}
+                            </span>
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
 
@@ -2150,9 +2492,11 @@ export default function App() {
                           return (
                             <tr
                               key={m.id || idx}
-                              className="hover:bg-slate-800/40 transition group"
+                              onClick={() => handleOpenEditModal(m)}
+                              className="hover:bg-blue-600/10 active:bg-blue-600/20 transition cursor-pointer group"
+                              title="Haz clic para modificar, registrar pago, anular o eliminar este movimiento"
                             >
-                              <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap">{m.fecha}</td>
+                              <td className="py-2.5 px-3 text-slate-300 whitespace-nowrap group-hover:text-blue-300">{m.fecha}</td>
                               <td className="py-2.5 px-3 font-mono text-slate-400 whitespace-nowrap">
                                 {m.facturaNro || '-'}
                               </td>
@@ -2531,18 +2875,56 @@ export default function App() {
                     Detalle de profesionales, comprobantes, retenciones aplicadas y neto a liquidar.
                   </p>
                 </div>
-                <div className="grid grid-cols-3 sm:flex gap-2 sm:gap-4 font-mono text-[11px] sm:text-xs">
-                  <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
-                    <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Bruto:</span>
-                    <strong className="text-indigo-400">{fmtMoney(stats.totalPagosMed)}</strong>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Quick Payment Status Filter Pills */}
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                    <button
+                      onClick={() => setMedicosPagoFilter('TODOS')}
+                      className={`px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer ${
+                        medicosPagoFilter === 'TODOS'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                      }`}
+                    >
+                      Todos ({medicosCounts.total})
+                    </button>
+                    <button
+                      onClick={() => setMedicosPagoFilter('PENDIENTES')}
+                      className={`px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        medicosPagoFilter === 'PENDIENTES'
+                          ? 'bg-amber-500 text-slate-950 font-bold'
+                          : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10'
+                      }`}
+                    >
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Pendientes ({medicosCounts.pendientes})
+                    </button>
+                    <button
+                      onClick={() => setMedicosPagoFilter('PAGADOS')}
+                      className={`px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        medicosPagoFilter === 'PAGADOS'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
+                      }`}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      Pagados ({medicosCounts.pagados})
+                    </button>
                   </div>
-                  <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
-                    <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Retenciones:</span>
-                    <strong className="text-amber-400">{fmtMoney(stats.totalRetencionesMed)}</strong>
-                  </div>
-                  <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
-                    <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Neto:</span>
-                    <strong className="text-emerald-400">{fmtMoney(stats.totalNetoMed)}</strong>
+
+                  <div className="grid grid-cols-3 sm:flex gap-2 sm:gap-4 font-mono text-[11px] sm:text-xs">
+                    <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
+                      <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Bruto:</span>
+                      <strong className="text-indigo-400">{fmtMoney(stats.totalPagosMed)}</strong>
+                    </div>
+                    <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
+                      <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Retenciones:</span>
+                      <strong className="text-amber-400">{fmtMoney(stats.totalRetencionesMed)}</strong>
+                    </div>
+                    <div className="bg-slate-950 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-800 text-center sm:text-left">
+                      <span className="text-[9px] text-slate-400 block sm:inline sm:mr-1">Neto:</span>
+                      <strong className="text-emerald-400">{fmtMoney(stats.totalNetoMed)}</strong>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2556,7 +2938,21 @@ export default function App() {
                         <th className="py-3 px-4">Factura Nº</th>
                         <th className="py-3 px-4">Médico / Profesional</th>
                         <th className="py-3 px-4">Período / Detalle</th>
-                        <th className="py-3 px-4">Fecha Pago / Referencia</th>
+                        <th className="py-2.5 px-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span>Fecha Pago / Referencia</span>
+                            <select
+                              value={medicosPagoFilter}
+                              onChange={(e) => setMedicosPagoFilter(e.target.value)}
+                              className="bg-slate-900 text-[11px] font-semibold text-slate-200 border border-slate-700/80 rounded-lg px-2 py-1 focus:outline-none focus:border-blue-500 cursor-pointer shadow-inner normal-case tracking-normal"
+                              title="Filtrar por estado de pago"
+                            >
+                              <option value="TODOS">Todos ({medicosCounts.total})</option>
+                              <option value="PENDIENTES">⏳ Solo Pendientes ({medicosCounts.pendientes})</option>
+                              <option value="PAGADOS">✓ Solo Pagados ({medicosCounts.pagados})</option>
+                            </select>
+                          </div>
+                        </th>
                         <th className="py-3 px-4 text-right">Bruto</th>
                         <th className="py-3 px-4 text-right">Retención</th>
                         <th className="py-3 px-4 text-right">Neto Liquidado</th>
@@ -2564,8 +2960,13 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {medicosData.map((m, i) => (
-                        <tr key={m.id || i} className="hover:bg-slate-800/40">
-                          <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{m.fecha}</td>
+                        <tr
+                          key={m.id || i}
+                          onClick={() => handleOpenEditModal(m)}
+                          className="hover:bg-blue-600/10 active:bg-blue-600/20 transition cursor-pointer group"
+                          title="Haz clic para modificar, registrar pago, anular o eliminar este movimiento"
+                        >
+                          <td className="py-3 px-4 text-slate-300 whitespace-nowrap group-hover:text-blue-300 transition">{m.fecha}</td>
                           <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">{m.facturaNro || '-'}</td>
                           <td className="py-3 px-4 text-white font-bold whitespace-nowrap">{m.empresaConcepto}</td>
                           <td className="py-3 px-4 text-slate-400 max-w-[200px] truncate">{m.detalle || '-'}</td>
@@ -2815,19 +3216,42 @@ export default function App() {
                       : 'bg-rose-500/10 text-rose-400'
                   }`}
                 >
-                  <PlusCircle className="w-5 h-5" />
+                  {editingId ? <Edit2 className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-sm sm:text-base text-white truncate">
-                    {modalType === 'EGRESO' && 'Cargar Egreso / Factura'}
-                    {modalType === 'MEDICO' && 'Cargar Honorario Médico'}
-                    {modalType === 'INGRESO' && 'Cargar Ingreso (CFL, CENS, Billeteras, Policlínica)'}
-                  </h3>
-                  <p className="text-xs text-slate-400">Período: {selectedMes}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-sm sm:text-base text-white truncate">
+                      {editingId ? (
+                        modalType === 'MEDICO'
+                          ? 'Modificar Honorario Médico'
+                          : modalType === 'INGRESO'
+                          ? 'Modificar Ingreso'
+                          : 'Modificar Comprobante / Gasto'
+                      ) : (
+                        modalType === 'EGRESO' && 'Cargar Egreso / Factura'
+                      )}
+                      {!editingId && modalType === 'MEDICO' && 'Cargar Honorario Médico'}
+                      {!editingId && modalType === 'INGRESO' && 'Cargar Ingreso (CFL, CENS, Billeteras, Policlínica)'}
+                    </h3>
+                    {editingId && (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          formData.fechaPago
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        }`}
+                      >
+                        {formData.fechaPago ? `✓ Pagado (${formData.fechaPago})` : '⏳ Pendiente de Pago'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    {editingId ? `Editando registro existente` : `Período: ${selectedMes}`}
+                  </p>
                 </div>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={handleCloseModal}
                 className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -2855,35 +3279,97 @@ export default function App() {
                     value={formData.facturaNro}
                     onChange={(e) => handleInputChange('facturaNro', e.target.value)}
                     className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none ${
-                      formData.facturaNro &&
-                      formData.empresaConcepto &&
-                      movimientos.some(
-                        (m) =>
-                          m.facturaNro &&
-                          String(m.facturaNro).trim().toLowerCase() === formData.facturaNro.trim().toLowerCase() &&
-                          m.empresaConcepto &&
-                          String(m.empresaConcepto).trim().toLowerCase() === formData.empresaConcepto.trim().toLowerCase()
-                      )
-                        ? 'border-rose-500 bg-rose-950/20 text-rose-300 focus:border-rose-400'
+                      duplicateVoucher
+                        ? duplicateVoucher.matchType === 'EXACT'
+                          ? 'border-rose-500 bg-rose-950/30 text-rose-200 focus:border-rose-400 font-semibold'
+                          : 'border-amber-500/80 bg-amber-950/20 text-amber-200 focus:border-amber-400'
                         : 'border-slate-800 focus:border-blue-500'
                     }`}
                   />
-                  {formData.facturaNro &&
-                    formData.empresaConcepto &&
-                    movimientos.some(
-                      (m) =>
-                        m.facturaNro &&
-                        String(m.facturaNro).trim().toLowerCase() === formData.facturaNro.trim().toLowerCase() &&
-                        m.empresaConcepto &&
-                        String(m.empresaConcepto).trim().toLowerCase() === formData.empresaConcepto.trim().toLowerCase()
-                    ) && (
-                      <span className="text-[10px] text-rose-400 font-semibold flex items-center gap-1 mt-1">
-                        <AlertCircle className="w-3 h-3 text-rose-400" />
-                        Ya existe un comprobante con este Nº para {formData.empresaConcepto}
-                      </span>
-                    )}
+                  {duplicateVoucher && (
+                    <span
+                      className={`text-[11px] font-semibold flex items-center gap-1 mt-1 ${
+                        duplicateVoucher.matchType === 'EXACT' ? 'text-rose-400' : 'text-amber-400'
+                      }`}
+                    >
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {duplicateVoucher.matchType === 'EXACT'
+                        ? `¡Factura ya cargada para ${duplicateVoucher.empresaConcepto}!`
+                        : `Existe comprobante Nº ${duplicateVoucher.facturaNro} cargado para ${duplicateVoucher.empresaConcepto}`}
+                    </span>
+                  )}
                 </div>
               </div>
+
+              {/* AVISO PROACTIVO DE COMPROBANTE EXISTENTE PARA NO CARGAR DE GUSTO */}
+              {duplicateVoucher && (
+                <div
+                  className={`p-3.5 rounded-xl border space-y-2.5 animate-in fade-in zoom-in-95 duration-150 ${
+                    duplicateVoucher.matchType === 'EXACT'
+                      ? 'bg-rose-500/10 border-rose-500/40 text-rose-200'
+                      : 'bg-amber-500/10 border-amber-500/40 text-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>
+                        {duplicateVoucher.matchType === 'EXACT'
+                          ? '⚠️ COMPROBANTE YA EXISTENTE EN EL SISTEMA'
+                          : 'ℹ️ Factura coincidente encontrada en otro registro'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-900 border border-slate-700">
+                      Período: {duplicateVoucher.mesPeriodo || 'N/A'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-slate-300">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-medium">Titular / Empresa:</span>
+                      <strong className="text-white truncate block">{duplicateVoucher.empresaConcepto}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-medium">Fecha / Concepto:</span>
+                      <span className="text-slate-300 block truncate">
+                        {duplicateVoucher.fecha} {duplicateVoucher.detalle ? `(${duplicateVoucher.detalle})` : ''}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block font-medium">Importe / Estado:</span>
+                      <span className="font-mono font-bold text-white block">
+                        {fmtMoney(
+                          duplicateVoucher.pagosS ||
+                            duplicateVoucher.netoPagadoMed ||
+                            duplicateVoucher.pagosMed ||
+                            duplicateVoucher.total
+                        )}
+                        <span
+                          className={`ml-1.5 text-[10px] font-normal ${
+                            duplicateVoucher.fechaPago ? 'text-emerald-400' : 'text-amber-400'
+                          }`}
+                        >
+                          {duplicateVoucher.fechaPago ? '✓ Pagada' : '⏳ Pendiente'}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5">
+                    <p className="text-[11px] text-slate-300">
+                      Para evitar cargar los datos nuevamente, puedes abrir este comprobante directamente para modificarlo.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditModal(duplicateVoucher)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md transition cursor-pointer shrink-0 flex items-center justify-center gap-1.5"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Abrir Comprobante Existente
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Dynamic Entity Select according to type with SEARCHABLE DROPDOWN */}
               {modalType === 'MEDICO' ? (
@@ -3467,21 +3953,48 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Submit Buttons */}
-              <div className="pt-3 sm:pt-4 border-t border-slate-800 flex justify-end gap-2.5 sm:gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-3.5 sm:px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 sm:px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition cursor-pointer"
-                >
-                  Guardar Movimiento
-                </button>
+              {/* Submit / Action Buttons */}
+              <div className="pt-3 sm:pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+                {editingId ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleDeleteMovement}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition cursor-pointer"
+                      title="Eliminar definitivamente este registro"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Eliminar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAnularMovement}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition cursor-pointer"
+                      title="Anular comprobante dejando importes en $0"
+                    >
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>Anular</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2.5 ml-auto">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="px-3.5 sm:px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 sm:px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition cursor-pointer font-medium"
+                  >
+                    {editingId ? 'Guardar Cambios' : 'Guardar Movimiento'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
