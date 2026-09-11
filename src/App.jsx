@@ -2354,13 +2354,12 @@ export default function App() {
                         <th className="py-3 px-3 text-right text-rose-400 print:text-rose-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">Débito (+)</th>
                         <th className="py-3 px-3 text-right text-emerald-400 print:text-emerald-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">Crédito (-)</th>
                         <th className="py-3 px-4 text-right text-blue-400 print:text-slate-900 font-extrabold print:py-1.5 print:px-2 print:w-[10%]">Saldo</th>
-                        <th className="py-3 px-3 text-center w-16 print:hidden">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {extractoCuenta.movimientos.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-16 text-center text-slate-500 print:text-slate-700 print:py-8">
+                          <td colSpan={6} className="py-16 text-center text-slate-500 print:text-slate-700 print:py-8">
                             <History className="w-8 h-8 mx-auto mb-2 opacity-40 print:hidden" />
                             No hay movimientos registrados para esta cuenta en el período activo.
                           </td>
@@ -2413,16 +2412,6 @@ export default function App() {
                               <td className="py-3 px-4 text-right font-mono font-bold text-white print:text-slate-900 print:py-1.5 print:px-2 whitespace-nowrap bg-slate-950/30 print:bg-transparent">
                                 {fmtMoney(row.saldo)}
                               </td>
-                              <td className="py-3 px-3 text-center whitespace-nowrap print:hidden" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditModal(row.movimientoOriginal)}
-                                  className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-blue-600 text-slate-400 hover:text-white transition cursor-pointer"
-                                  title="Editar / Gestionar comprobante"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
                             </tr>
                           )
                         })
@@ -2445,7 +2434,6 @@ export default function App() {
                               {fmtMoney(extractoCuenta.saldoFinal)}
                             </span>
                           </td>
-                          <td className="print:hidden"></td>
                         </tr>
                       </tfoot>
                     )}
