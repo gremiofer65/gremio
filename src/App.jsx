@@ -2272,13 +2272,12 @@ export default function App() {
                   </span>
                 </div>
                 <div className="overflow-x-auto overflow-y-auto max-h-[60vh] print:overflow-visible print:max-h-none print:w-full">
-                  <table className="w-full text-left text-xs border-collapse min-w-[700px] print:min-w-0 print:w-full print:text-[10px] print:table-fixed">
+                  <table className="w-full text-left text-xs border-collapse min-w-[650px] print:min-w-0 print:w-full print:text-[10px] print:table-fixed">
                     <thead className="bg-slate-950/80 sticky top-0 z-10 backdrop-blur border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold print:bg-slate-100 print:text-slate-900 print:border-slate-400">
                       <tr>
-                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[11%]">Fecha</th>
-                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[14%]">Comprobante</th>
-                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[15%]">Concepto</th>
-                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[30%]">Detalle / Referencia</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[12%]">Fecha</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[18%]">Comprobante</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[40%]">Concepto / Detalle</th>
                         <th className="py-3 px-3 text-right text-rose-400 print:text-rose-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">Débito (+)</th>
                         <th className="py-3 px-3 text-right text-emerald-400 print:text-emerald-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">Crédito (-)</th>
                         <th className="py-3 px-4 text-right text-blue-400 print:text-slate-900 font-extrabold print:py-1.5 print:px-2 print:w-[10%]">Saldo</th>
@@ -2288,7 +2287,7 @@ export default function App() {
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {extractoCuenta.movimientos.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="py-16 text-center text-slate-500 print:text-slate-700 print:py-8">
+                          <td colSpan={7} className="py-16 text-center text-slate-500 print:text-slate-700 print:py-8">
                             <History className="w-8 h-8 mx-auto mb-2 opacity-40 print:hidden" />
                             No hay movimientos registrados para esta cuenta en el período activo.
                           </td>
@@ -2311,22 +2310,26 @@ export default function App() {
                               <td className="py-3 px-3 font-mono text-slate-300 print:text-slate-900 font-semibold print:py-1.5 print:px-2 whitespace-nowrap group-hover:text-blue-200">
                                 {row.comprobante}
                               </td>
-                              <td className="py-3 px-3 whitespace-nowrap print:py-1.5 print:px-2">
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border print:border-none print:p-0 ${
-                                    isDebito
-                                      ? 'bg-rose-500/10 text-rose-400 print:text-rose-700 border-rose-500/20'
-                                      : 'bg-emerald-500/10 text-emerald-400 print:text-emerald-700 border-emerald-500/20'
-                                  }`}
-                                >
-                                  {row.tipoComprobante}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 text-slate-300 print:text-slate-900 print:py-1.5 print:px-2 max-w-[240px] truncate print:max-w-none print:whitespace-normal group-hover:text-slate-100">
-                                <div>{row.detalle}</div>
-                                {row.referencia && (
-                                  <span className="text-[10px] text-slate-500 print:text-slate-600">{row.referencia}</span>
-                                )}
+                              <td className="py-2.5 px-4 print:py-1.5 print:px-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border print:border-none print:p-0 ${
+                                      isDebito
+                                        ? 'bg-rose-500/10 text-rose-400 print:text-rose-700 border-rose-500/20'
+                                        : 'bg-emerald-500/10 text-emerald-400 print:text-emerald-700 border-emerald-500/20'
+                                    }`}
+                                  >
+                                    {row.tipoComprobante}
+                                  </span>
+                                </div>
+                                <div className="text-slate-300 print:text-slate-800 text-xs print:text-[9.5px] mt-1 leading-snug group-hover:text-slate-100">
+                                  <span>{row.detalle}</span>
+                                  {row.referencia && (
+                                    <span className="text-slate-500 print:text-slate-600 ml-1 text-[11px] print:text-[9px]">
+                                      • {row.referencia}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-3 px-3 text-right font-mono font-semibold text-rose-400 print:text-rose-700 print:py-1.5 print:px-2 whitespace-nowrap">
                                 {isDebito ? fmtMoney(row.debito) : '-'}
@@ -2355,7 +2358,7 @@ export default function App() {
                     {extractoCuenta.movimientos.length > 0 && (
                       <tfoot className="bg-slate-950 print:bg-slate-100 border-t-2 border-slate-700 print:border-slate-900 font-bold text-xs sticky bottom-0 z-10 shadow-lg print:shadow-none print:static">
                         <tr>
-                          <td colSpan={4} className="py-3 px-4 print:py-1.5 print:px-2 text-slate-300 print:text-slate-900 uppercase tracking-wider">
+                          <td colSpan={3} className="py-3 px-4 print:py-1.5 print:px-2 text-slate-300 print:text-slate-900 uppercase tracking-wider">
                             Total General
                           </td>
                           <td className="py-3 px-3 print:py-1.5 print:px-2 text-right font-mono text-rose-400 print:text-rose-700 whitespace-nowrap">
