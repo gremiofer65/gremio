@@ -1648,7 +1648,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans relative">
+    <div className="flex h-screen print:h-auto print:min-h-0 print:overflow-visible print:block bg-slate-950 text-slate-100 overflow-hidden font-sans relative">
       {/* MOBILE OVERLAY */}
       {isMobileSidebarOpen && (
         <div
@@ -1849,7 +1849,7 @@ export default function App() {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden print:overflow-visible print:block print:h-auto bg-slate-950">
         {/* TOP NAVBAR */}
         <header className="min-h-16 py-2.5 md:py-0 border-b border-slate-800 px-3 md:px-6 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/80 backdrop-blur-md shrink-0 z-30 print:hidden">
           <div className="flex items-center gap-2.5 md:gap-4 min-w-0">
@@ -1907,7 +1907,7 @@ export default function App() {
         </header>
 
         {/* VIEW CONTAINER */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4 md:space-y-6">
+        <div className="flex-1 overflow-y-auto print:overflow-visible print:block print:h-auto print:p-0 print:m-0 print:space-y-0 p-3 sm:p-5 lg:p-6 space-y-4 md:space-y-6">
           {/* TAB 1: CUENTA CORRIENTE */}
           {activeTab === 'cuentacorriente' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start print:block print:w-full">
@@ -2275,13 +2275,13 @@ export default function App() {
                   <table className="w-full text-left text-xs border-collapse min-w-[700px] print:min-w-0 print:w-full print:text-[10px] print:table-fixed">
                     <thead className="bg-slate-950/80 sticky top-0 z-10 backdrop-blur border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold print:bg-slate-100 print:text-slate-900 print:border-slate-400">
                       <tr>
-                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[12%]">Fecha</th>
-                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[15%]">Comprobante</th>
-                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[17%]">Tipo / Concepto</th>
-                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[26%]">Detalle / Referencia</th>
-                        <th className="py-3 px-3 text-right text-rose-400 print:text-rose-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">DÉBITO (+)</th>
-                        <th className="py-3 px-3 text-right text-emerald-400 print:text-emerald-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">CRÉDITO (-)</th>
-                        <th className="py-3 px-4 text-right text-blue-400 print:text-slate-900 font-extrabold print:py-1.5 print:px-2 print:w-[10%]">SALDO</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[11%]">Fecha</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[14%]">Comprobante</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[15%]">Concepto</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[30%]">Detalle / Referencia</th>
+                        <th className="py-3 px-3 text-right text-rose-400 print:text-rose-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">Débito (+)</th>
+                        <th className="py-3 px-3 text-right text-emerald-400 print:text-emerald-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">Crédito (-)</th>
+                        <th className="py-3 px-4 text-right text-blue-400 print:text-slate-900 font-extrabold print:py-1.5 print:px-2 print:w-[10%]">Saldo</th>
                         <th className="py-3 px-3 text-center w-16 print:hidden">Acción</th>
                       </tr>
                     </thead>
