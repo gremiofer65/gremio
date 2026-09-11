@@ -109,6 +109,66 @@ const getTodayLocalDate = () => {
   return `${year}-${month}-${day}`
 }
 
+const BANCOS_ARGENTINA = [
+  'Banco de la Nación Argentina (BNA)',
+  'Banco de la Provincia de Buenos Aires (BAPRO)',
+  'Banco Santander Argentina',
+  'Banco Galicia',
+  'Banco BBVA Argentina',
+  'Banco Macro',
+  'Banco Ciudad de Buenos Aires',
+  'Banco Credicoop Cooperativo Limitado',
+  'Banco Patagonia',
+  'Banco de Córdoba (BANCOR)',
+  'Banco de Santa Fe',
+  'Banco Supervielle',
+  'Banco Hipotecario',
+  'Banco HSBC Argentina',
+  'Banco ICBC (Industrial and Commercial Bank of China)',
+  'Banco Itaú Argentina',
+  'Banco Comafi',
+  'Banco de San Juan',
+  'Banco de Entre Ríos',
+  'Banco de Santa Cruz',
+  'Banco del Chubut',
+  'Banco de La Pampa',
+  'Banco de Corrientes',
+  'Banco de Neuquén (BPN)',
+  'Banco de Formosa',
+  'Banco de Santiago del Estero',
+  'Banco de Tierra del Fuego',
+  'Banco Rioja',
+  'Banco Municipal de Rosario',
+  'Banco Columbia',
+  'Banco BICA',
+  'Banco BST (Servicios y Transacciones)',
+  'Banco CMF',
+  'Banco Piano',
+  'Banco Industrial (BIND)',
+  'Banco Voii',
+  'Banco Coinag',
+  'Banco Meridian',
+  'Banco Roela',
+  'Banco Dino',
+  'Banco Julio',
+  'Banco Mariva',
+  'Banco Interfinanzas',
+  'Banco Saenz',
+  'Banco del Sol',
+  'Banco Brubank',
+  'Banco Openbank Argentina',
+  'Banco Ualá (Wilobank)',
+  'Banco Reba (Compañía Financiera)',
+  'Banco Citibank Argentina',
+  'Banco BNP Paribas',
+  'Banco Deutsche Bank',
+  'Banco JPMorgan Chase',
+  'Banco MUFG Bank',
+  'Banco BICE (Inversión y Comercio Exterior)',
+  'Caja de Crédito Cuenca',
+  'Nuevo Banco del Chaco'
+].sort((a, b) => a.localeCompare(b, 'es'))
+
 const defaultMaestros = {
   proveedores: initialData.maestros?.proveedores ? sortAlphabetical(initialData.maestros.proveedores) : [],
   medicos: initialData.maestros?.medicos ? sortAlphabetical(initialData.maestros.medicos) : [],
@@ -4324,11 +4384,17 @@ export default function App() {
                         </label>
                         <input
                           type="text"
-                          placeholder="Ej: Banco Nación / Galicia / Francés"
+                          list="bancos-argentina-list"
+                          placeholder="Buscar o seleccionar banco..."
                           value={formData.chequeBanco}
                           onChange={(e) => handleInputChange('chequeBanco', e.target.value)}
                           className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
                         />
+                        <datalist id="bancos-argentina-list">
+                          {BANCOS_ARGENTINA.map((banco) => (
+                            <option key={banco} value={banco} />
+                          ))}
+                        </datalist>
                       </div>
                       <div>
                         <label className="text-[10px] font-semibold text-slate-400 block mb-1">
