@@ -38,3 +38,106 @@ input[type="number"] {
   appearance: textfield;
 }
 
+/* ================= PRINT STYLES ================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 10mm 12mm 10mm;
+  }
+
+  *, *::before, *::after {
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11px !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide app navigation, sidebar, headers, filters and modal dialogs */
+  aside,
+  header,
+  .no-print,
+  button,
+  input,
+  select,
+  [role="dialog"] {
+    display: none !important;
+  }
+
+  /* Expand main container to 100% printable page */
+  main,
+  #root,
+  .app-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Reset table container to fit page without scrollbars */
+  .overflow-x-auto,
+  .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+    width: 100% !important;
+  }
+
+  /* Printable Table Formatting */
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+    table-layout: auto !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  th, td {
+    padding: 5px 6px !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+    font-size: 10px !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    color: #334155 !important;
+  }
+
+  tfoot tr td {
+    background-color: #f8fafc !important;
+    font-weight: 700 !important;
+    border-top: 2px solid #0f172a !important;
+  }
+}
+

@@ -1659,7 +1659,7 @@ export default function App() {
 
       {/* SIDEBAR */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transform transition-transform duration-200 ease-in-out md:static md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 transform transition-transform duration-200 ease-in-out md:static md:translate-x-0 print:hidden ${
           isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -1851,7 +1851,7 @@ export default function App() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-950">
         {/* TOP NAVBAR */}
-        <header className="min-h-16 py-2.5 md:py-0 border-b border-slate-800 px-3 md:px-6 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/80 backdrop-blur-md shrink-0 z-30">
+        <header className="min-h-16 py-2.5 md:py-0 border-b border-slate-800 px-3 md:px-6 flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/80 backdrop-blur-md shrink-0 z-30 print:hidden">
           <div className="flex items-center gap-2.5 md:gap-4 min-w-0">
             <button
               type="button"
@@ -1910,10 +1910,10 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 lg:p-6 space-y-4 md:space-y-6">
           {/* TAB 1: CUENTA CORRIENTE */}
           {activeTab === 'cuentacorriente' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start print:block print:w-full">
               {/* LEFT COLUMN: ENTITIES SELECTOR */}
               <div
-                className={`lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl ${
+                className={`lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl print:hidden ${
                   isMobileCCDetailOpen ? 'hidden lg:flex' : 'flex'
                 }`}
               >
@@ -2040,14 +2040,58 @@ export default function App() {
 
               {/* RIGHT COLUMN: EXTRACTO BANCARIO / LIBRO MAYOR */}
               <div
-                className={`lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl ${
+                className={`lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden shadow-xl print:bg-white print:border-none print:shadow-none print:w-full print:p-0 print:block ${
                   !isMobileCCDetailOpen ? 'hidden lg:flex' : 'flex'
                 }`}
               >
                 {/* Header Summary for Selected Entity */}
                 {selectedEntityObj ? (
                   <>
-                    <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    {/* PRINT-ONLY OFFICIAL DOCUMENT HEADER */}
+                    <div className="hidden print:block mb-4 text-black">
+                      <div className="flex justify-between items-start border-b-2 border-slate-900 pb-2 mb-3">
+                        <div>
+                          <h1 className="text-lg font-black uppercase tracking-wide text-slate-900">
+                            EXTRACTO DE CUENTA CORRIENTE
+                          </h1>
+                          <p className="text-xs text-slate-700 font-semibold mt-0.5">
+                            {selectedEntityObj.nombre} &bull; <span className="uppercase text-[10px] bg-slate-200 px-1.5 py-0.5 rounded font-bold">{selectedEntityObj.tipo}</span>
+                          </p>
+                        </div>
+                        <div className="text-right text-[10px] text-slate-600 leading-tight">
+                          <p><strong className="text-slate-900">Fecha de Emisión:</strong> {new Date().toLocaleDateString('es-AR')} {new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</p>
+                          <p><strong className="text-slate-900">Período:</strong> {ccPeriodFilter !== 'TODOS' ? ccPeriodFilter : 'Histórico Completo'}</p>
+                          {(ccStartDate || ccEndDate) && (
+                            <p><strong className="text-slate-900">Rango:</strong> {ccStartDate || 'Inicio'} a {ccEndDate || 'Fin'}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center bg-slate-50 border border-slate-300 rounded p-2.5 mb-3">
+                        <div>
+                          <span className="text-[9px] text-slate-500 uppercase font-bold block">Titular de la Cuenta</span>
+                          <span className="font-bold text-slate-900 text-sm">{selectedEntityObj.nombre}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-right font-mono">
+                          <div className="border-r border-slate-300 pr-3">
+                            <span className="text-[9px] text-slate-500 uppercase font-sans font-bold block">Total Débito</span>
+                            <span className="text-xs font-bold text-rose-600">{fmtMoney(extractoCuenta.totalDebito)}</span>
+                          </div>
+                          <div className="border-r border-slate-300 pr-3">
+                            <span className="text-[9px] text-slate-500 uppercase font-sans font-bold block">Total Crédito</span>
+                            <span className="text-xs font-bold text-emerald-600">{fmtMoney(extractoCuenta.totalCredito)}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 uppercase font-sans font-bold block">Saldo Final</span>
+                            <span className={`text-xs font-extrabold ${extractoCuenta.saldoFinal === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                              {fmtMoney(extractoCuenta.saldoFinal)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-950/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
@@ -2112,7 +2156,7 @@ export default function App() {
                     </div>
 
                     {/* Filter Toolbar */}
-                    <div className="px-3.5 sm:px-5 py-3 border-b border-slate-800 bg-slate-950/40 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="px-3.5 sm:px-5 py-3 border-b border-slate-800 bg-slate-950/40 flex flex-wrap items-center justify-between gap-3 text-xs print:hidden">
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         <span className="font-semibold text-slate-400 flex items-center gap-1.5 text-xs">
                           <Filter className="w-3.5 h-3.5 text-blue-400" />
@@ -2221,31 +2265,31 @@ export default function App() {
                 )}
 
                 {/* Table of Ledger Entries */}
-                <div className="p-3 bg-slate-950/40 border-b border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                <div className="p-3 bg-slate-950/40 border-b border-slate-800/80 flex items-center justify-between text-xs text-slate-400 print:hidden">
                   <span className="flex items-center gap-1.5 text-blue-400 font-medium">
                     <Edit2 className="w-3.5 h-3.5" />
                     Haz clic en cualquier comprobante o pago para modificarlo, registrar pago, anularlo o eliminarlo.
                   </span>
                 </div>
-                <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
-                  <table className="w-full text-left text-xs border-collapse min-w-[700px]">
-                    <thead className="bg-slate-950/80 sticky top-0 z-10 backdrop-blur border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
+                <div className="overflow-x-auto overflow-y-auto max-h-[60vh] print:overflow-visible print:max-h-none print:w-full">
+                  <table className="w-full text-left text-xs border-collapse min-w-[700px] print:min-w-0 print:w-full print:text-[10px] print:table-fixed">
+                    <thead className="bg-slate-950/80 sticky top-0 z-10 backdrop-blur border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold print:bg-slate-100 print:text-slate-900 print:border-slate-400">
                       <tr>
-                        <th className="py-3 px-4">Fecha</th>
-                        <th className="py-3 px-3">Comprobante</th>
-                        <th className="py-3 px-3">Tipo / Concepto</th>
-                        <th className="py-3 px-4">Detalle / Referencia</th>
-                        <th className="py-3 px-3 text-right text-rose-400 font-bold">DÉBITO (+)</th>
-                        <th className="py-3 px-3 text-right text-emerald-400 font-bold">CRÉDITO (-)</th>
-                        <th className="py-3 px-4 text-right text-blue-400 font-extrabold">SALDO</th>
-                        <th className="py-3 px-3 text-center w-16">Acción</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[12%]">Fecha</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[15%]">Comprobante</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2 print:w-[17%]">Tipo / Concepto</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2 print:w-[26%]">Detalle / Referencia</th>
+                        <th className="py-3 px-3 text-right text-rose-400 print:text-rose-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">DÉBITO (+)</th>
+                        <th className="py-3 px-3 text-right text-emerald-400 print:text-emerald-700 font-bold print:py-1.5 print:px-2 print:w-[10%]">CRÉDITO (-)</th>
+                        <th className="py-3 px-4 text-right text-blue-400 print:text-slate-900 font-extrabold print:py-1.5 print:px-2 print:w-[10%]">SALDO</th>
+                        <th className="py-3 px-3 text-center w-16 print:hidden">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {extractoCuenta.movimientos.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="py-16 text-center text-slate-500">
-                            <History className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                          <td colSpan={8} className="py-16 text-center text-slate-500 print:text-slate-700 print:py-8">
+                            <History className="w-8 h-8 mx-auto mb-2 opacity-40 print:hidden" />
                             No hay movimientos registrados para esta cuenta en el período activo.
                           </td>
                         </tr>
@@ -2261,39 +2305,39 @@ export default function App() {
                               className="hover:bg-blue-600/10 active:bg-blue-600/20 transition cursor-pointer group"
                               title="Haz clic para modificar, registrar pago, anular o eliminar este movimiento"
                             >
-                              <td className="py-3 px-4 text-slate-300 whitespace-nowrap group-hover:text-blue-300 transition">
+                              <td className="py-3 px-4 text-slate-300 print:text-slate-900 print:py-1.5 print:px-2 whitespace-nowrap group-hover:text-blue-300 transition">
                                 {row.fecha}
                               </td>
-                              <td className="py-3 px-3 font-mono text-slate-300 font-semibold whitespace-nowrap group-hover:text-blue-200">
+                              <td className="py-3 px-3 font-mono text-slate-300 print:text-slate-900 font-semibold print:py-1.5 print:px-2 whitespace-nowrap group-hover:text-blue-200">
                                 {row.comprobante}
                               </td>
-                              <td className="py-3 px-3 whitespace-nowrap">
+                              <td className="py-3 px-3 whitespace-nowrap print:py-1.5 print:px-2">
                                 <span
-                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border print:border-none print:p-0 ${
                                     isDebito
-                                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                      ? 'bg-rose-500/10 text-rose-400 print:text-rose-700 border-rose-500/20'
+                                      : 'bg-emerald-500/10 text-emerald-400 print:text-emerald-700 border-emerald-500/20'
                                   }`}
                                 >
                                   {row.tipoComprobante}
                                 </span>
                               </td>
-                              <td className="py-3 px-4 text-slate-300 max-w-[240px] truncate group-hover:text-slate-100">
+                              <td className="py-3 px-4 text-slate-300 print:text-slate-900 print:py-1.5 print:px-2 max-w-[240px] truncate print:max-w-none print:whitespace-normal group-hover:text-slate-100">
                                 <div>{row.detalle}</div>
                                 {row.referencia && (
-                                  <span className="text-[10px] text-slate-500">{row.referencia}</span>
+                                  <span className="text-[10px] text-slate-500 print:text-slate-600">{row.referencia}</span>
                                 )}
                               </td>
-                              <td className="py-3 px-3 text-right font-mono font-semibold text-rose-400 whitespace-nowrap">
+                              <td className="py-3 px-3 text-right font-mono font-semibold text-rose-400 print:text-rose-700 print:py-1.5 print:px-2 whitespace-nowrap">
                                 {isDebito ? fmtMoney(row.debito) : '-'}
                               </td>
-                              <td className="py-3 px-3 text-right font-mono font-semibold text-emerald-400 whitespace-nowrap">
+                              <td className="py-3 px-3 text-right font-mono font-semibold text-emerald-400 print:text-emerald-700 print:py-1.5 print:px-2 whitespace-nowrap">
                                 {isCredito ? fmtMoney(row.credito) : '-'}
                               </td>
-                              <td className="py-3 px-4 text-right font-mono font-bold text-white whitespace-nowrap bg-slate-950/30">
+                              <td className="py-3 px-4 text-right font-mono font-bold text-white print:text-slate-900 print:py-1.5 print:px-2 whitespace-nowrap bg-slate-950/30 print:bg-transparent">
                                 {fmtMoney(row.saldo)}
                               </td>
-                              <td className="py-3 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <td className="py-3 px-3 text-center whitespace-nowrap print:hidden" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenEditModal(row.movimientoOriginal)}
@@ -2309,30 +2353,30 @@ export default function App() {
                       )}
                     </tbody>
                     {extractoCuenta.movimientos.length > 0 && (
-                      <tfoot className="bg-slate-950 border-t-2 border-slate-700 font-bold text-xs sticky bottom-0 z-10 shadow-lg">
+                      <tfoot className="bg-slate-950 print:bg-slate-100 border-t-2 border-slate-700 print:border-slate-900 font-bold text-xs sticky bottom-0 z-10 shadow-lg print:shadow-none print:static">
                         <tr>
-                          <td colSpan={4} className="py-3 px-4 text-slate-300 uppercase tracking-wider">
+                          <td colSpan={4} className="py-3 px-4 print:py-1.5 print:px-2 text-slate-300 print:text-slate-900 uppercase tracking-wider">
                             Total General
                           </td>
-                          <td className="py-3 px-3 text-right font-mono text-rose-400 whitespace-nowrap">
+                          <td className="py-3 px-3 print:py-1.5 print:px-2 text-right font-mono text-rose-400 print:text-rose-700 whitespace-nowrap">
                             {fmtMoney(extractoCuenta.totalDebito)}
                           </td>
-                          <td className="py-3 px-3 text-right font-mono text-emerald-400 whitespace-nowrap">
+                          <td className="py-3 px-3 print:py-1.5 print:px-2 text-right font-mono text-emerald-400 print:text-emerald-700 whitespace-nowrap">
                             {fmtMoney(extractoCuenta.totalCredito)}
                           </td>
-                          <td className="py-3 px-4 text-right font-mono text-white whitespace-nowrap bg-slate-900/80">
-                            <span className={extractoCuenta.saldoFinal === 0 ? 'text-emerald-400' : 'text-amber-400'}>
+                          <td className="py-3 px-4 print:py-1.5 print:px-2 text-right font-mono text-white print:text-slate-900 whitespace-nowrap bg-slate-900/80 print:bg-transparent">
+                            <span className={extractoCuenta.saldoFinal === 0 ? 'text-emerald-400 print:text-emerald-700' : 'text-amber-400 print:text-amber-700'}>
                               {fmtMoney(extractoCuenta.saldoFinal)}
                             </span>
                           </td>
-                          <td></td>
+                          <td className="print:hidden"></td>
                         </tr>
                       </tfoot>
                     )}
                   </table>
                 </div>
 
-                <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950 flex flex-wrap justify-between items-center gap-2 text-xs">
+                <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950 flex flex-wrap justify-between items-center gap-2 text-xs print:hidden">
                   <div className="flex items-center gap-2 text-slate-400 text-[11px] sm:text-xs">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>Partida doble contable aplicada</span>
@@ -2345,6 +2389,20 @@ export default function App() {
                       <Printer className="w-3.5 h-3.5 text-slate-400" />
                       Imprimir
                     </button>
+                  </div>
+                </div>
+
+                {/* PRINT-ONLY SIGNATURE FOOTER */}
+                <div className="hidden print:grid grid-cols-2 gap-8 mt-12 pt-4 border-t border-slate-300 text-center text-[10px] text-slate-600">
+                  <div>
+                    <div className="border-b border-slate-400 w-48 mx-auto mb-1"></div>
+                    <p className="font-bold text-slate-800">Firma y Sello Responsable</p>
+                    <p>Administración / Contabilidad</p>
+                  </div>
+                  <div>
+                    <div className="border-b border-slate-400 w-48 mx-auto mb-1"></div>
+                    <p className="font-bold text-slate-800">Firma y Conformidad</p>
+                    <p>{selectedEntityObj?.nombre || 'Titular'}</p>
                   </div>
                 </div>
               </div>
