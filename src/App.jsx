@@ -94,6 +94,14 @@ const sortAlphabetical = (arr = []) => {
   return [...arr].sort((a, b) => (a || '').localeCompare(b || '', 'es', { sensitivity: 'base' }))
 }
 
+const getTodayLocalDate = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const defaultMaestros = {
   proveedores: initialData.maestros?.proveedores ? sortAlphabetical(initialData.maestros.proveedores) : [],
   medicos: initialData.maestros?.medicos ? sortAlphabetical(initialData.maestros.medicos) : [],
@@ -597,7 +605,7 @@ export default function App() {
   
   // Helper to obtain a fresh, blank form state for any modal type
   const getCleanFormData = useCallback((type = 'EGRESO') => ({
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: getTodayLocalDate(),
     facturaNro: '',
     rubro: type === 'MEDICO' ? 'MÉDICO' : type === 'INGRESO' ? 'INGRESOS' : 'PROVEEDOR',
     empresaConcepto: '',
@@ -1171,7 +1179,7 @@ export default function App() {
     const pctRet = hasRet && pagMed > 0 ? Number(((retMed / pagMed) * 100).toFixed(0)) : 5
 
     setFormData({
-      fecha: mov.fecha ? String(mov.fecha).slice(0, 10) : new Date().toISOString().split('T')[0],
+      fecha: mov.fecha ? String(mov.fecha).slice(0, 10) : getTodayLocalDate(),
       facturaNro: mov.facturaNro || '',
       rubro: mov.rubro || 'PROVEEDOR',
       empresaConcepto: mov.empresaConcepto || '',
@@ -3899,17 +3907,35 @@ export default function App() {
               {/* Pago / Cheque */}
               <div className="bg-slate-950/60 p-3 sm:p-3.5 rounded-xl border border-slate-800 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                    <CreditCard className="w-3.5 h-3.5 text-blue-400" />
-                    Estado y Medio de Pago
-                  </span>
                   <div className="flex items-center gap-2">
+                    <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-xs font-bold text-slate-200">
+                      Estado y Medio de Pago
+                    </span>
+                    {formData.fechaPago ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        {formData.fechaPago === getTodayLocalDate() ? '✓ Pagado Hoy' : `✓ Pagado (${formData.fechaPago})`}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                        ⏳ Pendiente de Pago
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => handleInputChange('fechaPago', new Date().toISOString().split('T')[0])}
-                      className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition cursor-pointer"
+                      onClick={() => {
+                        handleInputChange('fechaPago', getTodayLocalDate())
+                      }}
+                      className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        formData.fechaPago === getTodayLocalDate()
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20'
+                      }`}
                     >
-                      ✓ Pagado Hoy
+                      <Check className="w-3 h-3" />
+                      Pagado Hoy
                     </button>
                     {formData.fechaPago && (
                       <button
@@ -3918,8 +3944,9 @@ export default function App() {
                           handleInputChange('fechaPago', '')
                           handleInputChange('chequeOperacion', '')
                         }}
-                        className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition cursor-pointer"
+                        className="px-2.5 py-1 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition cursor-pointer flex items-center gap-1"
                       >
+                        <AlertCircle className="w-3 h-3" />
                         Dejar Pendiente
                       </button>
                     )}
@@ -3928,8 +3955,21 @@ export default function App() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="text-[11px] font-medium text-slate-400 block mb-1">
-                      Fecha de Pago {formData.fechaPago ? '' : '(Opcional)'}
+                    <label className="text-[11px] font-medium block mb-1">
+                      {formData.fechaPago === getTodayLocalDate() ? (
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          Fecha de Pago (Cargada Automáticamente: Hoy)
+                        </span>
+                      ) : formData.fechaPago ? (
+                        <span className="text-emerald-400 font-semibold">
+                          Fecha de Pago
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">
+                          Fecha de Pago (Opcional)
+                        </span>
+                      )}
                     </label>
                     <input
                       type="date"
@@ -3944,7 +3984,7 @@ export default function App() {
                     </label>
                     <input
                       type="text"
-                      placeholder="Nº de Cheque, Transf, etc..."
+                      placeholder="Nº de Cheque, Transf, OP, etc..."
                       value={formData.chequeOperacion}
                       onChange={(e) => handleInputChange('chequeOperacion', e.target.value)}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
