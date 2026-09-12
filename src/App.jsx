@@ -2403,7 +2403,7 @@ export default function App() {
                         const isPorVencer = item.status === 'POR_VENCER'
 
                         const badgeStyle = isAnulado
-                          ? 'bg-slate-700/50 text-slate-300 border-slate-600/60'
+                          ? 'bg-red-500/20 text-red-400 border-red-500/40 font-bold'
                           : isCaducado
                           ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
                           : isDevuelto
@@ -2434,7 +2434,7 @@ export default function App() {
                               <span
                                 className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap ${badgeStyle}`}
                               >
-                                {isAnulado && <Ban className="w-2.5 h-2.5 text-slate-400" />}
+                                {isAnulado && <Ban className="w-2.5 h-2.5 text-red-400" />}
                                 {isCaducado && <Clock className="w-2.5 h-2.5 text-orange-400" />}
                                 {isDevuelto && <RotateCcw className="w-2.5 h-2.5 text-purple-400" />}
                                 {isPagado && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />}
@@ -4151,7 +4151,7 @@ export default function App() {
                           const isPorVencer = item.status === 'POR_VENCER'
 
                           const badgeStyle = isAnulado
-                            ? 'bg-slate-700/50 text-slate-300 border-slate-600/60'
+                            ? 'bg-red-500/20 text-red-400 border-red-500/40 font-bold'
                             : isCaducado
                             ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
                             : isDevuelto
@@ -4176,7 +4176,7 @@ export default function App() {
                               <td className="py-3 px-4 whitespace-nowrap">
                                 <div className="flex flex-col gap-1">
                                   <span className={`inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full font-bold border w-fit ${badgeStyle}`}>
-                                    {isAnulado && <Ban className="w-2.5 h-2.5 text-slate-400" />}
+                                    {isAnulado && <Ban className="w-2.5 h-2.5 text-red-400" />}
                                     {isCaducado && <Clock className="w-2.5 h-2.5 text-orange-400" />}
                                     {isDevuelto && <RotateCcw className="w-2.5 h-2.5 text-purple-400" />}
                                     {isPagado && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />}
