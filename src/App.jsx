@@ -522,6 +522,8 @@ export default function App() {
   // Cuenta Corriente specific state
   const [selectedEntity, setSelectedEntity] = useState('')
   const [ccFilterType, setCcFilterType] = useState('TODOS') // 'TODOS' | 'PROVEEDORES' | 'MEDICOS' | 'EMPLEADOS'
+  const [ccSaldoFilter, setCcSaldoFilter] = useState('TODOS') // 'TODOS' | 'CON_PENDIENTES' | 'AL_DIA'
+  const [ccImputacionFilter, setCcImputacionFilter] = useState('TODOS') // 'TODOS' | 'FALTA_IMPUTAR' | 'IMPUTADOS'
   const [ccSearchTerm, setCcSearchTerm] = useState('')
   const [ccPeriodFilter, setCcPeriodFilter] = useState('TODOS')
   const [ccYearFilter, setCcYearFilter] = useState('TODOS')
@@ -834,13 +836,13 @@ export default function App() {
 
     // Init from maestros (sorted alphabetically)
     sortAlphabetical(maestros.proveedores || []).forEach((p) => {
-      map[p] = { nombre: p, tipo: 'PROVEEDOR', totalDebito: 0, totalCredito: 0, movimientosCount: 0 }
+      map[p] = { nombre: p, tipo: 'PROVEEDOR', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
     })
     sortAlphabetical(maestros.medicos || []).forEach((m) => {
-      map[m] = { nombre: m, tipo: 'MÉDICO', totalDebito: 0, totalCredito: 0, movimientosCount: 0 }
+      map[m] = { nombre: m, tipo: 'MÉDICO', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
     })
     sortAlphabetical(maestros.empleados || []).forEach((e) => {
-      map[e] = { nombre: e, tipo: 'EMPLEADOS', totalDebito: 0, totalCredito: 0, movimientosCount: 0 }
+      map[e] = { nombre: e, tipo: 'EMPLEADOS', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
     })
 
     movimientos.forEach((m) => {
@@ -853,7 +855,9 @@ export default function App() {
           tipo: m.rubro || 'PROVEEDOR',
           totalDebito: 0,
           totalCredito: 0,
-          movimientosCount: 0
+          movimientosCount: 0,
+          pendientesCount: 0,
+          montoPendiente: 0
         }
       }
 
@@ -864,16 +868,28 @@ export default function App() {
         const credito = m.fechaPago ? debito : 0
         map[entName].totalDebito += debito
         map[entName].totalCredito += credito
+        if (!m.fechaPago && debito > 0) {
+          map[entName].pendientesCount += 1
+          map[entName].montoPendiente += debito
+        }
       } else if (m.rubro === 'INGRESOS') {
         const monto = Number(m.total || 0)
         map[entName].totalDebito += monto
         map[entName].totalCredito += m.fechaPago ? monto : 0
+        if (!m.fechaPago && monto > 0) {
+          map[entName].pendientesCount += 1
+          map[entName].montoPendiente += monto
+        }
       } else {
         const monto = Number(m.pagosS || 0)
         const debito = monto
         const credito = m.fechaPago ? monto : 0
         map[entName].totalDebito += debito
         map[entName].totalCredito += credito
+        if (!m.fechaPago && debito > 0) {
+          map[entName].pendientesCount += 1
+          map[entName].montoPendiente += debito
+        }
       }
     })
 
@@ -885,7 +901,7 @@ export default function App() {
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
   }, [movimientos, maestros])
 
-  // Filtered entities list with strict alphabetical order
+  // Filtered entities list with strict alphabetical order and saldo/pending status filter
   const filteredEntidades = useMemo(() => {
     return entidadesCC.filter((e) => {
       const matchType =
@@ -897,9 +913,14 @@ export default function App() {
       const matchSearch =
         ccSearchTerm === '' || e.nombre.toLowerCase().includes(ccSearchTerm.toLowerCase())
 
-      return matchType && matchSearch
+      const matchSaldo =
+        ccSaldoFilter === 'TODOS' ||
+        (ccSaldoFilter === 'CON_PENDIENTES' && (e.pendientesCount > 0 || e.saldo > 0)) ||
+        (ccSaldoFilter === 'AL_DIA' && e.pendientesCount === 0 && e.saldo === 0)
+
+      return matchType && matchSearch && matchSaldo
     })
-  }, [entidadesCC, ccFilterType, ccSearchTerm])
+  }, [entidadesCC, ccFilterType, ccSearchTerm, ccSaldoFilter])
 
   // Set default selected entity if empty
   useEffect(() => {
@@ -911,7 +932,7 @@ export default function App() {
 
   // Extract ledger movements with running balance for the selected entity
   const extractoCuenta = useMemo(() => {
-    if (!selectedEntity) return { movimientos: [], totalDebito: 0, totalCredito: 0, saldoFinal: 0 }
+    if (!selectedEntity) return { movimientos: [], totalDebito: 0, totalCredito: 0, saldoFinal: 0, totalPendientes: 0, montoPendiente: 0 }
 
     const entMovs = movimientos
       .filter((m) => {
@@ -940,23 +961,31 @@ export default function App() {
     let runningBalance = 0
     let sumDebito = 0
     let sumCredito = 0
+    let totalPendientes = 0
+    let montoPendiente = 0
 
-    const rows = []
+    const allRows = []
 
     entMovs.forEach((m) => {
       let debito = 0
       let credito = 0
       let descripcion = m.detalle || 'Comprobante comercial'
       let comprobante = m.facturaNro || '-'
+      const isPending = !m.fechaPago
 
       if (m.rubro === 'MÉDICO') {
         debito = Number(m.netoPagadoMed || m.pagosMed || 0)
         runningBalance += debito
         sumDebito += debito
-        rows.push({
+        if (isPending) {
+          totalPendientes += 1
+          montoPendiente += debito
+        }
+        allRows.push({
           id: `${m.id}-dev`,
           movimientoOriginal: m,
           isPagoRow: false,
+          faltaImputar: isPending,
           fecha: m.fecha,
           comprobante,
           tipoComprobante: 'Factura / Liquidación Honorario',
@@ -971,10 +1000,11 @@ export default function App() {
           credito = debito
           runningBalance -= credito
           sumCredito += credito
-          rows.push({
+          allRows.push({
             id: `${m.id}-pago`,
             movimientoOriginal: m,
             isPagoRow: true,
+            faltaImputar: false,
             fecha: m.fechaPago,
             comprobante: m.chequeOperacion || 'OP-TRANSF',
             tipoComprobante: 'Orden de Pago / Cheque',
@@ -990,10 +1020,15 @@ export default function App() {
         debito = monto
         runningBalance += debito
         sumDebito += debito
-        rows.push({
+        if (isPending) {
+          totalPendientes += 1
+          montoPendiente += debito
+        }
+        allRows.push({
           id: `${m.id}-ing`,
           movimientoOriginal: m,
           isPagoRow: false,
+          faltaImputar: isPending,
           fecha: m.fecha,
           comprobante,
           tipoComprobante: 'Recibo de Ingreso',
@@ -1008,10 +1043,15 @@ export default function App() {
         debito = monto
         runningBalance += debito
         sumDebito += debito
-        rows.push({
+        if (isPending) {
+          totalPendientes += 1
+          montoPendiente += debito
+        }
+        allRows.push({
           id: `${m.id}-fac`,
           movimientoOriginal: m,
           isPagoRow: false,
+          faltaImputar: isPending,
           fecha: m.fecha,
           comprobante,
           tipoComprobante: 'Factura / Comprobante de Compra',
@@ -1026,10 +1066,11 @@ export default function App() {
           credito = monto
           runningBalance -= credito
           sumCredito += credito
-          rows.push({
+          allRows.push({
             id: `${m.id}-pago`,
             movimientoOriginal: m,
             isPagoRow: true,
+            faltaImputar: false,
             fecha: m.fechaPago,
             comprobante: m.chequeOperacion || 'OP-PAGO',
             tipoComprobante: 'Orden de Pago / Comprobante de Cancelación',
@@ -1043,13 +1084,25 @@ export default function App() {
       }
     })
 
+    const filteredRows = allRows.filter((r) => {
+      if (ccImputacionFilter === 'FALTA_IMPUTAR') {
+        return r.faltaImputar === true
+      }
+      if (ccImputacionFilter === 'IMPUTADOS') {
+        return !r.faltaImputar
+      }
+      return true
+    })
+
     return {
-      movimientos: rows,
+      movimientos: filteredRows,
       totalDebito: sumDebito,
       totalCredito: sumCredito,
-      saldoFinal: runningBalance
+      saldoFinal: runningBalance,
+      totalPendientes,
+      montoPendiente
     }
-  }, [selectedEntity, movimientos, ccPeriodFilter, ccYearFilter, ccStartDate, ccEndDate])
+  }, [selectedEntity, movimientos, ccPeriodFilter, ccYearFilter, ccStartDate, ccEndDate, ccImputacionFilter])
 
   // Helper to export Cuenta Corriente Ledger to CSV/Excel
   const handleExportCCExcel = () => {
@@ -2570,7 +2623,7 @@ export default function App() {
                     />
                   </div>
 
-                  {/* Tabs Filter */}
+                  {/* Tabs Filter by Type */}
                   <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950 rounded-lg text-[11px] font-semibold text-slate-400">
                     <button
                       onClick={() => setCcFilterType('TODOS')}
@@ -2603,6 +2656,35 @@ export default function App() {
                       }`}
                     >
                       Personal
+                    </button>
+                  </div>
+
+                  {/* Status Filter (Todas | Falta Imputar | Al Día) */}
+                  <div className="grid grid-cols-3 gap-1 p-1 bg-slate-950/90 rounded-lg text-[10px] font-semibold text-slate-400 border border-slate-800/60">
+                    <button
+                      onClick={() => setCcSaldoFilter('TODOS')}
+                      className={`py-1 rounded cursor-pointer transition ${
+                        ccSaldoFilter === 'TODOS' ? 'bg-slate-800 text-white shadow-sm font-bold' : 'hover:text-white'
+                      }`}
+                    >
+                      Todas
+                    </button>
+                    <button
+                      onClick={() => setCcSaldoFilter('CON_PENDIENTES')}
+                      className={`py-1 rounded cursor-pointer transition flex items-center justify-center gap-1 ${
+                        ccSaldoFilter === 'CON_PENDIENTES' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shadow-sm' : 'text-amber-400/80 hover:text-amber-300'
+                      }`}
+                    >
+                      <Clock className="w-2.5 h-2.5" />
+                      <span>Falta Imputar</span>
+                    </button>
+                    <button
+                      onClick={() => setCcSaldoFilter('AL_DIA')}
+                      className={`py-1 rounded cursor-pointer transition ${
+                        ccSaldoFilter === 'AL_DIA' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold shadow-sm' : 'text-emerald-400/80 hover:text-emerald-300'
+                      }`}
+                    >
+                      ✓ Al Día
                     </button>
                   </div>
                 </div>
@@ -2642,8 +2724,14 @@ export default function App() {
                               {ent.nombre}
                             </span>
                           </div>
-                          <div className="text-[11px] text-slate-400 mt-1 flex gap-3">
-                            <span>{ent.movimientosCount} movimientos</span>
+                          <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+                            <span>{ent.movimientosCount} mov.</span>
+                            {ent.pendientesCount > 0 && (
+                              <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm">
+                                <Clock className="w-2.5 h-2.5 text-amber-400" />
+                                {ent.pendientesCount} sin imputar
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -2828,6 +2916,24 @@ export default function App() {
                           </select>
                         </div>
 
+                        {/* Imputación / Estado del Pago Filter */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-slate-500 text-[11px]">Imputación:</span>
+                          <select
+                            value={ccImputacionFilter}
+                            onChange={(e) => setCcImputacionFilter(e.target.value)}
+                            className={`bg-slate-900 border rounded-lg px-2 py-1 text-xs focus:outline-none font-semibold cursor-pointer ${
+                              ccImputacionFilter === 'FALTA_IMPUTAR'
+                                ? 'border-amber-500/60 text-amber-300 bg-amber-950/20'
+                                : 'border-slate-800 text-slate-200 focus:border-blue-500'
+                            }`}
+                          >
+                            <option value="TODOS">Todos los comprobantes</option>
+                            <option value="FALTA_IMPUTAR">⏳ Falta Imputar Pago ({extractoCuenta.totalPendientes || 0})</option>
+                            <option value="IMPUTADOS">✓ Imputados / Pagados</option>
+                          </select>
+                        </div>
+
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-slate-500 text-[11px]">Desde:</span>
                           <input
@@ -2851,13 +2957,14 @@ export default function App() {
                           />
                         </div>
 
-                        {(ccYearFilter !== 'TODOS' || ccPeriodFilter !== 'TODOS' || ccStartDate || ccEndDate) && (
+                        {(ccYearFilter !== 'TODOS' || ccPeriodFilter !== 'TODOS' || ccStartDate || ccEndDate || ccImputacionFilter !== 'TODOS') && (
                           <button
                             onClick={() => {
                               setCcYearFilter('TODOS')
                               setCcPeriodFilter('TODOS')
                               setCcStartDate('')
                               setCcEndDate('')
+                              setCcImputacionFilter('TODOS')
                             }}
                             className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold underline cursor-pointer"
                           >
@@ -2917,7 +3024,9 @@ export default function App() {
                         <tr>
                           <td colSpan={6} className="py-16 text-center text-slate-500 print:text-slate-700 print:py-8">
                             <History className="w-8 h-8 mx-auto mb-2 opacity-40 print:hidden" />
-                            No hay movimientos registrados para esta cuenta en el período activo.
+                            {ccImputacionFilter === 'FALTA_IMPUTAR'
+                              ? '¡Excelente! No hay comprobantes pendientes de imputar en este período/cuenta.'
+                              : 'No hay movimientos registrados para esta cuenta en el período activo.'}
                           </td>
                         </tr>
                       ) : (
@@ -2929,8 +3038,12 @@ export default function App() {
                             <tr
                               key={row.id}
                               onClick={() => handleOpenEditModal(row.movimientoOriginal)}
-                              className="hover:bg-blue-600/10 active:bg-blue-600/20 transition cursor-pointer group"
-                              title="Haz clic para modificar, registrar pago, anular o eliminar este movimiento"
+                              className={`transition cursor-pointer group ${
+                                row.faltaImputar
+                                  ? 'bg-amber-950/10 hover:bg-amber-600/15'
+                                  : 'hover:bg-blue-600/10 active:bg-blue-600/20'
+                              }`}
+                              title={row.faltaImputar ? '⏳ Comprobante sin pago imputado. Haz clic para imputar pago o registrar comprobante.' : 'Haz clic para modificar, anular o ver detalles de este movimiento'}
                             >
                               <td className="py-3 px-4 text-slate-300 print:text-slate-900 print:py-1.5 print:px-2 whitespace-nowrap group-hover:text-blue-300 transition">
                                 {row.fecha}
@@ -2949,6 +3062,12 @@ export default function App() {
                                   >
                                     {row.tipoComprobante}
                                   </span>
+                                  {row.faltaImputar && (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                                      <Clock className="w-2.5 h-2.5 text-amber-400" />
+                                      Falta Imputar Pago
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-slate-300 print:text-slate-800 text-xs print:text-[9.5px] mt-1 leading-snug group-hover:text-slate-100">
                                   <span>{row.detalle}</span>
