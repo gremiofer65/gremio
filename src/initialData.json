@@ -32408,7 +32408,7 @@
       "detalle": "E-Cheq de Tercero Recibido - Nº 09661508 (A la orden)",
       "detalleExtenso": "Emisor: SANGRE Y TIERRA SA • CUIT: 30716128284 • Carácter: A la orden • Estado Origen: DEVOLUCION-ACEPTADA",
       "realizadoEn": "Policlinica AMOS",
-      "fechaPago": "",
+      "fechaPago": "2026-07-15",
       "chequeOperacion": "E-Cheq Tercero | Nº 09661508 | Cobro: 2026-07-15 | Emisor: SANGRE Y TIERRA SA | CUIT: 30716128284",
       "mesPeriodo": "JULIO 26",
       "pagosS": 0,
@@ -32427,10 +32427,10 @@
       "consultas": 0,
       "enfermeria": 0,
       "odontologia": 0,
-      "otIngresos": 0,
+      "otIngresos": 611767,
       "compensaciones": 0,
-      "total": 0,
-      "observaciones": "Estado: DEVOLUCION-ACEPTADA | Importe: $611.767 | Carácter: A la orden | CUIT: 30716128284"
+      "total": 611767,
+      "observaciones": "Estado: DEVOLUCION-ACEPTADA (Cobrado/Liquidado) | CUIT: 30716128284"
     },
     {
       "id": "mov-1109",
@@ -32474,7 +32474,7 @@
       "detalle": "E-Cheq de Tercero Recibido - Nº 68767497 (A la orden)",
       "detalleExtenso": "Emisor: CASA VETRANO SOC. HEC. • CUIT: 30665144999 • Carácter: A la orden • Estado Origen: ANULADO",
       "realizadoEn": "Policlinica AMOS",
-      "fechaPago": "",
+      "fechaPago": "2026-09-21",
       "chequeOperacion": "E-Cheq Tercero | Nº 68767497 | Cobro: 2026-09-21 | Emisor: CASA VETRANO SOC. HEC. | CUIT: 30665144999",
       "mesPeriodo": "SETIEMBRE 26",
       "pagosS": 0,
@@ -32493,10 +32493,10 @@
       "consultas": 0,
       "enfermeria": 0,
       "odontologia": 0,
-      "otIngresos": 0,
+      "otIngresos": 100980.7,
       "compensaciones": 0,
-      "total": 0,
-      "observaciones": "Estado: ANULADO | Importe: $100.980,7 | Carácter: A la orden | CUIT: 30665144999"
+      "total": 100980.7,
+      "observaciones": "Estado: ANULADO (Cerrado/Liquidado) | CUIT: 30665144999"
     },
     {
       "id": "mov-1111",
@@ -32573,7 +32573,7 @@
       "detalle": "E-Cheq de Tercero Recibido - Nº 09661507 (A la orden)",
       "detalleExtenso": "Emisor: SANGRE Y TIERRA SA • CUIT: 30716128284 • Carácter: A la orden • Estado Origen: DEVOLUCION-ACEPTADA",
       "realizadoEn": "Policlinica AMOS",
-      "fechaPago": "",
+      "fechaPago": "2026-06-15",
       "chequeOperacion": "E-Cheq Tercero | Nº 09661507 | Cobro: 2026-06-15 | Emisor: SANGRE Y TIERRA SA | CUIT: 30716128284",
       "mesPeriodo": "JUNIO 26",
       "pagosS": 0,
@@ -32592,10 +32592,10 @@
       "consultas": 0,
       "enfermeria": 0,
       "odontologia": 0,
-      "otIngresos": 0,
+      "otIngresos": 611767,
       "compensaciones": 0,
-      "total": 0,
-      "observaciones": "Estado: DEVOLUCION-ACEPTADA | Importe: $611.767 | Carácter: A la orden | CUIT: 30716128284"
+      "total": 611767,
+      "observaciones": "Estado: DEVOLUCION-ACEPTADA (Cobrado/Liquidado) | CUIT: 30716128284"
     },
     {
       "id": "mov-1114",
@@ -33398,7 +33398,7 @@
       "detalle": "E-Cheq de Tercero Recibido - Nº 01453119 (A la orden)",
       "detalleExtenso": "Emisor: LOGISTICA GORMET SA • CUIT: 30715159585 • Carácter: A la orden • Estado Origen: CADUCADO",
       "realizadoEn": "Policlinica AMOS",
-      "fechaPago": "",
+      "fechaPago": "2025-10-02",
       "chequeOperacion": "E-Cheq Tercero | Nº 01453119 | Cobro: 2025-10-02 | Emisor: LOGISTICA GORMET SA | CUIT: 30715159585",
       "mesPeriodo": "OCTUBRE 25",
       "pagosS": 0,
@@ -33417,10 +33417,10 @@
       "consultas": 0,
       "enfermeria": 0,
       "odontologia": 0,
-      "otIngresos": 0,
+      "otIngresos": 102345.99,
       "compensaciones": 0,
-      "total": 0,
-      "observaciones": "Estado: CADUCADO | Importe: $102.345,99 | Carácter: A la orden | CUIT: 30715159585"
+      "total": 102345.99,
+      "observaciones": "Estado: CADUCADO (Cerrado/Liquidado) | CUIT: 30715159585"
     }
   ],
   "maestros": {
