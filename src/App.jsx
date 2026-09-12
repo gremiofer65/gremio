@@ -52,7 +52,9 @@ import {
   Bell,
   Clock,
   AlertTriangle,
-  Download
+  Download,
+  Ban,
+  RotateCcw
 } from 'lucide-react'
 import {
   BarChart,
@@ -1251,14 +1253,31 @@ export default function App() {
       const entidad = m.empresaConcepto || 'Sin Especificar'
       const isPagado = !!m.fechaPago
 
-      let status = 'AL_DIA' // 'PAGADO' | 'VENCIDO' | 'HOY' | 'POR_VENCER' | 'EN_PERIODO' | 'FUTURO'
-      let severity = 'info' // 'success' | 'danger' | 'warning' | 'today' | 'info'
+      const obsUpper = `${m.observaciones || ''} ${m.detalleExtenso || ''} ${m.chequeOperacion || ''}`.toUpperCase()
+      const isAnulado = obsUpper.includes('ANULADO')
+      const isCaducado = obsUpper.includes('CADUCADO')
+      const isDevuelto = obsUpper.includes('DEVOLUCION') || obsUpper.includes('DEVUELTO')
+
+      let status = 'ACTIVO' // 'ACTIVO' | 'PAGADO' | 'ANULADO' | 'CADUCADO' | 'DEVUELTO' | 'VENCIDO' | 'HOY' | 'POR_VENCER'
+      let severity = 'info'
       let label = ''
 
-      if (isPagado) {
+      if (isAnulado) {
+        status = 'ANULADO'
+        severity = 'anulado'
+        label = '⊘ Anulado'
+      } else if (isCaducado) {
+        status = 'CADUCADO'
+        severity = 'caducado'
+        label = '⌛ Caducado'
+      } else if (isDevuelto) {
+        status = 'DEVUELTO'
+        severity = 'devuelto'
+        label = '↩ Devuelto'
+      } else if (isPagado) {
         status = 'PAGADO'
         severity = 'success'
-        label = m.fechaPago ? `✓ Cobrado / Pagado (${m.fechaPago})` : '✓ Cobrado / Pagado'
+        label = m.fechaPago ? `✓ Cobrado (${m.fechaPago})` : '✓ Cobrado / Pagado'
       } else if (diffDays < 0) {
         status = 'VENCIDO'
         severity = 'danger'
@@ -1271,14 +1290,10 @@ export default function App() {
         status = 'POR_VENCER'
         severity = 'warning'
         label = `Vence en ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`
-      } else if (m.mesPeriodo && selectedMes && m.mesPeriodo.trim() === selectedMes.trim()) {
-        status = 'EN_PERIODO'
-        severity = 'info'
-        label = `En período (${m.mesPeriodo})`
       } else {
-        status = 'FUTURO'
-        severity = 'info'
-        label = `A cobrar/pagar el ${effectiveDateStr}`
+        status = 'ACTIVO'
+        severity = 'activo'
+        label = `🟢 Activo en Cartera`
       }
 
       const isECheq = upper.includes('ECHEQ') || upper.includes('E-CHEQ') || upper.includes('ELECTR')
@@ -1294,6 +1309,9 @@ export default function App() {
         severity,
         label,
         isPagado,
+        isAnulado,
+        isCaducado,
+        isDevuelto,
         chequeRef: m.chequeOperacion || ref,
         tipo: upper.includes('TERCERO') ? 'Tercero' : 'Propio',
         formato: isECheq ? 'E-Cheq' : 'Físico',
@@ -1301,19 +1319,23 @@ export default function App() {
       })
     })
 
-    // Ordenar: primero los más críticos (vencidos sin pagar, hoy, próximos a vencer, etc.)
+    // Ordenar: primero los más críticos (vencidos sin pagar, hoy, próximos a vencer, activos, etc.)
+    const isSpecialClosed = (a) => a.status === 'ANULADO' || a.status === 'CADUCADO' || a.status === 'DEVUELTO' || a.status === 'PAGADO'
     alerts.sort((a, b) => {
-      if (a.isPagado && !b.isPagado) return 1
-      if (!a.isPagado && b.isPagado) return -1
+      if (isSpecialClosed(a) && !isSpecialClosed(b)) return 1
+      if (!isSpecialClosed(a) && isSpecialClosed(b)) return -1
       return a.diffDays - b.diffDays
     })
 
-    const criticos = alerts.filter((a) => !a.isPagado && (a.status === 'VENCIDO' || a.status === 'HOY' || a.status === 'POR_VENCER'))
-    const vencidosCount = alerts.filter((a) => !a.isPagado && a.status === 'VENCIDO').length
-    const hoyCount = alerts.filter((a) => !a.isPagado && a.status === 'HOY').length
-    const porVencerCount = alerts.filter((a) => !a.isPagado && a.status === 'POR_VENCER').length
-    const enPeriodoCount = alerts.filter((a) => !a.isPagado && a.status === 'EN_PERIODO').length
-    const pagadosCount = alerts.filter((a) => a.isPagado).length
+    const criticos = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && (a.status === 'VENCIDO' || a.status === 'HOY' || a.status === 'POR_VENCER'))
+    const vencidosCount = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && a.status === 'VENCIDO').length
+    const hoyCount = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && a.status === 'HOY').length
+    const porVencerCount = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && a.status === 'POR_VENCER').length
+    const activosCount = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a)).length
+    const pagadosCount = alerts.filter((a) => a.status === 'PAGADO').length
+    const anuladosCount = alerts.filter((a) => a.status === 'ANULADO').length
+    const caducadosCount = alerts.filter((a) => a.status === 'CADUCADO').length
+    const devueltosCount = alerts.filter((a) => a.status === 'DEVUELTO').length
 
     return {
       all: alerts,
@@ -1321,8 +1343,11 @@ export default function App() {
       vencidosCount,
       hoyCount,
       porVencerCount,
-      enPeriodoCount,
+      activosCount,
       pagadosCount,
+      anuladosCount,
+      caducadosCount,
+      devueltosCount,
       totalAlertas: criticos.length
     }
   }, [movimientos, selectedMes])
@@ -1349,11 +1374,14 @@ export default function App() {
       }
 
       if (chequeFilterEstado !== 'TODOS') {
+        if (chequeFilterEstado === 'ACTIVOS' && (item.isPagado || item.status === 'ANULADO' || item.status === 'CADUCADO' || item.status === 'DEVUELTO')) return false
+        if (chequeFilterEstado === 'PAGADOS' && item.status !== 'PAGADO') return false
+        if (chequeFilterEstado === 'ANULADOS' && item.status !== 'ANULADO') return false
+        if (chequeFilterEstado === 'CADUCADOS' && item.status !== 'CADUCADO') return false
+        if (chequeFilterEstado === 'DEVUELTOS' && item.status !== 'DEVUELTO') return false
         if (chequeFilterEstado === 'VENCIDO' && item.status !== 'VENCIDO') return false
         if (chequeFilterEstado === 'HOY' && item.status !== 'HOY') return false
         if (chequeFilterEstado === 'POR_VENCER' && item.status !== 'POR_VENCER') return false
-        if (chequeFilterEstado === 'PAGADOS' && !item.isPagado) return false
-        if (chequeFilterEstado === 'PENDIENTES' && item.isPagado) return false
       }
 
       if (chequeFilterMes !== 'TODOS') {
@@ -2366,9 +2394,29 @@ export default function App() {
                       </div>
                     ) : (
                       chequeAlerts.all.map((item) => {
+                        const isAnulado = item.status === 'ANULADO'
+                        const isCaducado = item.status === 'CADUCADO'
+                        const isDevuelto = item.status === 'DEVUELTO'
+                        const isPagado = item.status === 'PAGADO'
                         const isVencido = item.status === 'VENCIDO'
                         const isHoy = item.status === 'HOY'
                         const isPorVencer = item.status === 'POR_VENCER'
+
+                        const badgeStyle = isAnulado
+                          ? 'bg-slate-700/50 text-slate-300 border-slate-600/60'
+                          : isCaducado
+                          ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                          : isDevuelto
+                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                          : isPagado
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-semibold'
+                          : isVencido
+                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                          : isHoy
+                          ? 'bg-red-500 text-white font-extrabold border-red-400 animate-pulse'
+                          : isPorVencer
+                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                          : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 font-semibold'
 
                         return (
                           <div
@@ -2384,17 +2432,16 @@ export default function App() {
                                 {item.entidad}
                               </span>
                               <span
-                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap ${
-                                  isVencido
-                                    ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                                    : isHoy
-                                    ? 'bg-red-500 text-white font-extrabold border-red-400 animate-pulse'
-                                    : isPorVencer
-                                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                                    : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                                }`}
+                                className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap ${badgeStyle}`}
                               >
-                                {item.label}
+                                {isAnulado && <Ban className="w-2.5 h-2.5 text-slate-400" />}
+                                {isCaducado && <Clock className="w-2.5 h-2.5 text-orange-400" />}
+                                {isDevuelto && <RotateCcw className="w-2.5 h-2.5 text-purple-400" />}
+                                {isPagado && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />}
+                                {isVencido && <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />}
+                                {isHoy && <Zap className="w-2.5 h-2.5" />}
+                                {isPorVencer && <Clock className="w-2.5 h-2.5 text-amber-400" />}
+                                <span>{item.label}</span>
                               </span>
                             </div>
 
@@ -3979,12 +4026,21 @@ export default function App() {
                       onChange={(e) => setChequeFilterEstado(e.target.value)}
                       className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
                     >
-                      <option value="TODOS">Todos los Estados</option>
-                      <option value="VENCIDO">🚨 Vencidos ({chequeAlerts.vencidosCount})</option>
-                      <option value="HOY">⚡ Vence Hoy ({chequeAlerts.hoyCount})</option>
-                      <option value="POR_VENCER">⏳ Próximos 7 días ({chequeAlerts.porVencerCount})</option>
-                      <option value="PENDIENTES">⏳ Sin Pagar (Pendientes)</option>
-                      <option value="PAGADOS">✓ Pagados</option>
+                      <option value="TODOS">Todos los Estados ({chequeAlerts.all.length})</option>
+                      <option value="ACTIVOS">🟢 Activos en Cartera ({chequeAlerts.activosCount})</option>
+                      <option value="PAGADOS">✓ Cobrados / Pagados ({chequeAlerts.pagadosCount})</option>
+                      <option value="DEVUELTOS">↩ Devueltos ({chequeAlerts.devueltosCount})</option>
+                      <option value="ANULADOS">⊘ Anulados ({chequeAlerts.anuladosCount})</option>
+                      <option value="CADUCADOS">⌛ Caducados ({chequeAlerts.caducadosCount})</option>
+                      {chequeAlerts.vencidosCount > 0 && (
+                        <option value="VENCIDO">🚨 Vencidos ({chequeAlerts.vencidosCount})</option>
+                      )}
+                      {chequeAlerts.hoyCount > 0 && (
+                        <option value="HOY">⚡ Vence Hoy ({chequeAlerts.hoyCount})</option>
+                      )}
+                      {chequeAlerts.porVencerCount > 0 && (
+                        <option value="POR_VENCER">⏳ Próximos 7 días ({chequeAlerts.porVencerCount})</option>
+                      )}
                     </select>
 
                     {/* Filtro Tipo: Propio vs Tercero */}
@@ -4086,10 +4142,29 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 print:divide-slate-300 font-medium">
                       {filteredCheques.map((item) => {
-                          const isPagado = item.isPagado || item.status === 'PAGADO'
-                          const isVencido = !isPagado && item.status === 'VENCIDO'
-                          const isHoy = !isPagado && item.status === 'HOY'
-                          const isPorVencer = !isPagado && item.status === 'POR_VENCER'
+                          const isAnulado = item.status === 'ANULADO'
+                          const isCaducado = item.status === 'CADUCADO'
+                          const isDevuelto = item.status === 'DEVUELTO'
+                          const isPagado = item.status === 'PAGADO'
+                          const isVencido = item.status === 'VENCIDO'
+                          const isHoy = item.status === 'HOY'
+                          const isPorVencer = item.status === 'POR_VENCER'
+
+                          const badgeStyle = isAnulado
+                            ? 'bg-slate-700/50 text-slate-300 border-slate-600/60'
+                            : isCaducado
+                            ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                            : isDevuelto
+                            ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                            : isPagado
+                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-semibold'
+                            : isVencido
+                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                            : isHoy
+                            ? 'bg-red-500 text-white font-extrabold border-red-400 animate-pulse'
+                            : isPorVencer
+                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                            : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 font-semibold'
 
                           return (
                             <tr
@@ -4100,23 +4175,17 @@ export default function App() {
                             >
                               <td className="py-3 px-4 whitespace-nowrap">
                                 <div className="flex flex-col gap-1">
-                                  <span
-                                    className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border w-fit ${
-                                      isPagado
-                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-semibold'
-                                        : isVencido
-                                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                                        : isHoy
-                                        ? 'bg-red-500 text-white font-extrabold border-red-400 animate-pulse'
-                                        : isPorVencer
-                                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                                        : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                                    }`}
-                                  >
+                                  <span className={`inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full font-bold border w-fit ${badgeStyle}`}>
+                                    {isAnulado && <Ban className="w-2.5 h-2.5 text-slate-400" />}
+                                    {isCaducado && <Clock className="w-2.5 h-2.5 text-orange-400" />}
+                                    {isDevuelto && <RotateCcw className="w-2.5 h-2.5 text-purple-400" />}
                                     {isPagado && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />}
-                                    {isVencido && <AlertTriangle className="w-2.5 h-2.5" />}
+                                    {isVencido && <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />}
                                     {isHoy && <Zap className="w-2.5 h-2.5" />}
-                                    {isPorVencer && <Clock className="w-2.5 h-2.5" />}
+                                    {isPorVencer && <Clock className="w-2.5 h-2.5 text-amber-400" />}
+                                    {!isAnulado && !isCaducado && !isDevuelto && !isPagado && !isVencido && !isHoy && !isPorVencer && (
+                                      <FileText className="w-2.5 h-2.5 text-cyan-400" />
+                                    )}
                                     <span>{item.label}</span>
                                   </span>
                                   <span className="text-[10px] text-slate-400 font-mono">
