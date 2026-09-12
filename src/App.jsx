@@ -667,6 +667,13 @@ export default function App() {
   const [selectedSede, setSelectedSede] = useState('TODAS')
   const [medicosPagoFilter, setMedicosPagoFilter] = useState('TODOS') // 'TODOS' | 'PENDIENTES' | 'PAGADOS'
 
+  // Search & Filter for Cheques Module
+  const [chequeSearchTerm, setChequeSearchTerm] = useState('')
+  const [chequeFilterTipo, setChequeFilterTipo] = useState('TODOS') // 'TODOS' | 'PROPIO' | 'TERCERO'
+  const [chequeFilterFormato, setChequeFilterFormato] = useState('TODOS') // 'TODOS' | 'FISICO' | 'ECHEQ'
+  const [chequeFilterEstado, setChequeFilterEstado] = useState('TODOS') // 'TODOS' | 'VENCIDO' | 'HOY' | 'POR_VENCER' | 'PAGADOS' | 'PENDIENTES'
+  const [chequeFilterMes, setChequeFilterMes] = useState('TODOS')
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalType, setModalType] = useState('EGRESO') // 'EGRESO' | 'MEDICO' | 'INGRESO'
@@ -2095,6 +2102,38 @@ export default function App() {
 
             <button
               onClick={() => {
+                setActiveTab('cheques')
+                setIsMobileSidebarOpen(false)
+              }}
+              title="Gestión de Cheques"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer relative ${
+                activeTab === 'cheques'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <div className="relative">
+                <FileText className="w-4 h-4 shrink-0 text-amber-400" />
+                {chequeAlerts.totalAlertas > 0 && isSidebarCollapsed && (
+                  <span className="absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                )}
+              </div>
+              {!isSidebarCollapsed && (
+                <div className="flex items-center justify-between flex-1 min-w-0">
+                  <span className="truncate">Cheques</span>
+                  {chequeAlerts.totalAlertas > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-rose-500 text-white shrink-0">
+                      {chequeAlerts.totalAlertas}
+                    </span>
+                  )}
+                </div>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
                 setActiveTab('dashboard')
                 setIsMobileSidebarOpen(false)
               }}
@@ -2214,6 +2253,7 @@ export default function App() {
               <h2 className="text-sm md:text-base lg:text-lg font-semibold text-white truncate">
                 {activeTab === 'cuentacorriente' && 'Cuentas Corrientes'}
                 {activeTab === 'libro' && 'Libro Diario / Caja'}
+                {activeTab === 'cheques' && 'Gestión y Cartera de Cheques'}
                 {activeTab === 'dashboard' && 'Dashboard y Balances'}
                 {activeTab === 'medicos' && 'Honorarios Médicos'}
                 {activeTab === 'maestros' && 'Tablas Maestras'}
@@ -3750,6 +3790,295 @@ export default function App() {
                         </div>
                       )
                     })}
+                </div>
+              </div>
+            </div>
+          )}
+          {/* TAB 6: GESTIÓN DE CHEQUES */}
+          {activeTab === 'cheques' && (
+            <div className="space-y-4 md:space-y-6 animate-in fade-in duration-150">
+              {/* HEADER & METRICS CARDS */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-slate-400 font-medium truncate">Total Cheques</p>
+                    <p className="text-lg sm:text-xl font-black text-white font-mono">{chequeAlerts.all.length}</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-3.5 sm:p-4 shadow-lg flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-rose-300 font-medium truncate">Cheques Vencidos</p>
+                    <p className="text-lg sm:text-xl font-black text-rose-400 font-mono">{chequeAlerts.vencidosCount}</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 shadow-lg flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-amber-300 font-medium truncate">Vencen Hoy / 7 Días</p>
+                    <p className="text-lg sm:text-xl font-black text-amber-400 font-mono">
+                      {chequeAlerts.hoyCount + chequeAlerts.porVencerCount}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-3.5 sm:p-4 shadow-lg flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-slate-400 font-medium truncate">Monto en Cartera</p>
+                    <p className="text-sm sm:text-base font-black text-emerald-400 font-mono truncate">
+                      {fmtMoney(chequeAlerts.all.reduce((acc, c) => acc + c.importe, 0))}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* FILTERS & SEARCH BAR */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex-1 min-w-[240px] relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por titular, banco, Nº de cheque o referencia..."
+                      value={chequeSearchTerm}
+                      onChange={(e) => setChequeSearchTerm(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Filtro Estado */}
+                    <select
+                      value={chequeFilterEstado}
+                      onChange={(e) => setChequeFilterEstado(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
+                    >
+                      <option value="TODOS">Todos los Estados</option>
+                      <option value="VENCIDO">🚨 Vencidos ({chequeAlerts.vencidosCount})</option>
+                      <option value="HOY">⚡ Vence Hoy ({chequeAlerts.hoyCount})</option>
+                      <option value="POR_VENCER">⏳ Próximos 7 días ({chequeAlerts.porVencerCount})</option>
+                      <option value="PENDIENTES">⏳ Sin Pagar (Pendientes)</option>
+                      <option value="PAGADOS">✓ Pagados</option>
+                    </select>
+
+                    {/* Filtro Tipo: Propio vs Tercero */}
+                    <select
+                      value={chequeFilterTipo}
+                      onChange={(e) => setChequeFilterTipo(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
+                    >
+                      <option value="TODOS">Todos los Tipos</option>
+                      <option value="PROPIO">Cheque Propio</option>
+                      <option value="TERCERO">Cheque de Tercero</option>
+                    </select>
+
+                    {/* Filtro Formato: Físico vs Echeq */}
+                    <select
+                      value={chequeFilterFormato}
+                      onChange={(e) => setChequeFilterFormato(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
+                    >
+                      <option value="TODOS">Todos los Formatos</option>
+                      <option value="ECHEQ">E-Cheq (Electrónico)</option>
+                      <option value="FISICO">Papel / Físico</option>
+                    </select>
+
+                    {/* Filtro Mes/Período */}
+                    <select
+                      value={chequeFilterMes}
+                      onChange={(e) => setChequeFilterMes(e.target.value)}
+                      className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
+                    >
+                      <option value="TODOS">Todos los Períodos</option>
+                      <option value="ACTIVO">Solo Período Activo ({selectedMes})</option>
+                      {meses.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABLE OF CHEQUES */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead className="bg-slate-950/80 sticky top-0 z-10 text-[11px] text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+                      <tr>
+                        <th className="py-3 px-4">Estado / Vencimiento</th>
+                        <th className="py-3 px-3">Tipo / Formato</th>
+                        <th className="py-3 px-3">Titular / Beneficiario</th>
+                        <th className="py-3 px-4">Detalle / Referencia Bancaria</th>
+                        <th className="py-3 px-3">Emisión</th>
+                        <th className="py-3 px-4 text-right">Importe</th>
+                        <th className="py-3 px-3 text-center">Gestión</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 font-medium">
+                      {chequeAlerts.all
+                        .filter((item) => {
+                          if (chequeSearchTerm) {
+                            const term = chequeSearchTerm.toLowerCase()
+                            const matchEnt = item.entidad.toLowerCase().includes(term)
+                            const matchRef = item.chequeRef.toLowerCase().includes(term)
+                            const matchDet = (item.movimiento.detalle || '').toLowerCase().includes(term)
+                            if (!matchEnt && !matchRef && !matchDet) return false
+                          }
+
+                          if (chequeFilterTipo !== 'TODOS') {
+                            if (chequeFilterTipo === 'PROPIO' && item.tipo !== 'Propio') return false
+                            if (chequeFilterTipo === 'TERCERO' && item.tipo !== 'Tercero') return false
+                          }
+
+                          if (chequeFilterFormato !== 'TODOS') {
+                            if (chequeFilterFormato === 'ECHEQ' && item.formato !== 'E-Cheq') return false
+                            if (chequeFilterFormato === 'FISICO' && item.formato !== 'Físico') return false
+                          }
+
+                          if (chequeFilterEstado !== 'TODOS') {
+                            if (chequeFilterEstado === 'VENCIDO' && item.status !== 'VENCIDO') return false
+                            if (chequeFilterEstado === 'HOY' && item.status !== 'HOY') return false
+                            if (chequeFilterEstado === 'POR_VENCER' && item.status !== 'POR_VENCER') return false
+                            if (chequeFilterEstado === 'PAGADOS' && !item.isPagado) return false
+                            if (chequeFilterEstado === 'PENDIENTES' && item.isPagado) return false
+                          }
+
+                          if (chequeFilterMes !== 'TODOS') {
+                            if (chequeFilterMes === 'ACTIVO') {
+                              if (item.movimiento.mesPeriodo && item.movimiento.mesPeriodo.trim() !== selectedMes.trim()) return false
+                            } else {
+                              if (item.movimiento.mesPeriodo && item.movimiento.mesPeriodo.trim() !== chequeFilterMes.trim()) return false
+                            }
+                          }
+
+                          return true
+                        })
+                        .map((item) => {
+                          const isVencido = item.status === 'VENCIDO'
+                          const isHoy = item.status === 'HOY'
+                          const isPorVencer = item.status === 'POR_VENCER'
+
+                          return (
+                            <tr
+                              key={item.id}
+                              onClick={() => handleOpenEditModal(item.movimiento)}
+                              className="hover:bg-blue-600/10 active:bg-blue-600/20 transition cursor-pointer group"
+                              title="Haz clic para ver o editar la información completa del cheque"
+                            >
+                              <td className="py-3 px-4 whitespace-nowrap">
+                                <div className="flex flex-col gap-1">
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border w-fit ${
+                                      isVencido
+                                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                                        : isHoy
+                                        ? 'bg-red-500 text-white font-extrabold border-red-400 animate-pulse'
+                                        : isPorVencer
+                                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                                        : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                    }`}
+                                  >
+                                    {isVencido && <AlertTriangle className="w-2.5 h-2.5" />}
+                                    {isHoy && <Zap className="w-2.5 h-2.5" />}
+                                    {isPorVencer && <Clock className="w-2.5 h-2.5" />}
+                                    <span>{item.label}</span>
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    Cobro: {item.fechaCobro}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                      item.tipo === 'Propio'
+                                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                        : 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                                    }`}
+                                  >
+                                    {item.tipo}
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                      item.formato === 'E-Cheq'
+                                        ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                    }`}
+                                  >
+                                    {item.formato}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <div className="font-bold text-slate-200 group-hover:text-blue-300 transition">
+                                  {item.entidad}
+                                </div>
+                                <div className="text-[11px] text-slate-400">
+                                  {item.rubro} • {item.movimiento.mesPeriodo || 'Sin mes'}
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-4">
+                                <div className="text-slate-300 font-mono text-xs font-semibold">
+                                  {item.chequeRef}
+                                </div>
+                                {item.movimiento.detalle && (
+                                  <div className="text-[11px] text-slate-400 mt-0.5">
+                                    {item.movimiento.detalle}
+                                  </div>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-3 text-slate-400 whitespace-nowrap font-mono text-[11px]">
+                                {item.movimiento.fecha}
+                              </td>
+
+                              <td className="py-3 px-4 text-right font-mono font-bold text-white whitespace-nowrap text-sm">
+                                {fmtMoney(item.importe)}
+                              </td>
+
+                              <td className="py-3 px-3 text-center whitespace-nowrap">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    item.isPagado
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                      : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                  }`}
+                                >
+                                  {item.isPagado ? '✓ Pagado' : '⏳ Pendiente'}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+
+                      {chequeAlerts.all.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="py-16 text-center text-slate-500">
+                            <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                            No hay cheques registrados en el sistema actualmente.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
