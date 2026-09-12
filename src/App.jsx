@@ -51,7 +51,8 @@ import {
   Sparkles,
   Bell,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Download
 } from 'lucide-react'
 import {
   BarChart,
@@ -1308,6 +1309,97 @@ export default function App() {
       totalAlertas: criticos.length
     }
   }, [movimientos, selectedMes])
+
+  // Cheques filtrados según los controles de búsqueda del módulo
+  const filteredCheques = useMemo(() => {
+    return chequeAlerts.all.filter((item) => {
+      if (chequeSearchTerm) {
+        const term = chequeSearchTerm.toLowerCase()
+        const matchEnt = item.entidad.toLowerCase().includes(term)
+        const matchRef = item.chequeRef.toLowerCase().includes(term)
+        const matchDet = (item.movimiento.detalle || '').toLowerCase().includes(term)
+        if (!matchEnt && !matchRef && !matchDet) return false
+      }
+
+      if (chequeFilterTipo !== 'TODOS') {
+        if (chequeFilterTipo === 'PROPIO' && item.tipo !== 'Propio') return false
+        if (chequeFilterTipo === 'TERCERO' && item.tipo !== 'Tercero') return false
+      }
+
+      if (chequeFilterFormato !== 'TODOS') {
+        if (chequeFilterFormato === 'ECHEQ' && item.formato !== 'E-Cheq') return false
+        if (chequeFilterFormato === 'FISICO' && item.formato !== 'Físico') return false
+      }
+
+      if (chequeFilterEstado !== 'TODOS') {
+        if (chequeFilterEstado === 'VENCIDO' && item.status !== 'VENCIDO') return false
+        if (chequeFilterEstado === 'HOY' && item.status !== 'HOY') return false
+        if (chequeFilterEstado === 'POR_VENCER' && item.status !== 'POR_VENCER') return false
+        if (chequeFilterEstado === 'PAGADOS' && !item.isPagado) return false
+        if (chequeFilterEstado === 'PENDIENTES' && item.isPagado) return false
+      }
+
+      if (chequeFilterMes !== 'TODOS') {
+        if (chequeFilterMes === 'ACTIVO') {
+          if (item.movimiento.mesPeriodo && item.movimiento.mesPeriodo.trim() !== selectedMes.trim()) return false
+        } else {
+          if (item.movimiento.mesPeriodo && item.movimiento.mesPeriodo.trim() !== chequeFilterMes.trim()) return false
+        }
+      }
+
+      return true
+    })
+  }, [chequeAlerts.all, chequeSearchTerm, chequeFilterTipo, chequeFilterFormato, chequeFilterEstado, chequeFilterMes, selectedMes])
+
+  // Helper para exportar Cheques a Excel (CSV con formato compatible con Microsoft Excel)
+  const exportChequesToExcel = (chequesToExport = []) => {
+    if (!chequesToExport || chequesToExport.length === 0) {
+      alert('No hay cheques para exportar con los filtros seleccionados.')
+      return
+    }
+
+    const headers = [
+      'Titular / Beneficiario',
+      'Rubro',
+      'Mes / Período',
+      'Tipo Cheque',
+      'Formato',
+      'Estado Vencimiento',
+      'Fecha Cobro / Vto',
+      'Fecha Emisión',
+      'Referencia / Banco',
+      'Detalle',
+      'Importe',
+      'Estado de Pago'
+    ]
+
+    const rows = chequesToExport.map((c) => [
+      `"${(c.entidad || '').replace(/"/g, '""')}"`,
+      `"${(c.rubro || '').replace(/"/g, '""')}"`,
+      `"${(c.movimiento.mesPeriodo || '').replace(/"/g, '""')}"`,
+      `"${c.tipo}"`,
+      `"${c.formato}"`,
+      `"${c.label}"`,
+      `"${c.fechaCobro || ''}"`,
+      `"${c.movimiento.fecha || ''}"`,
+      `"${(c.chequeRef || '').replace(/"/g, '""')}"`,
+      `"${(c.movimiento.detalle || '').replace(/"/g, '""')}"`,
+      Number(c.importe || 0).toFixed(2),
+      `"${c.isPagado ? 'Pagado' : 'Pendiente'}"`
+    ])
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const fileName = `Reporte_Cheques_${selectedMes.replace(/\s+/g, '_')}_${getTodayLocalDate()}.csv`
+    link.setAttribute('href', url)
+    link.setAttribute('download', fileName)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 
   // Handle Form Change with Auto Calculations
   const handleInputChange = (field, value) => {
@@ -3844,8 +3936,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* FILTERS & SEARCH BAR */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-3">
+              {/* FILTERS & SEARCH BAR & ACTIONS */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-3 print:hidden">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex-1 min-w-[240px] relative">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
@@ -3909,65 +4001,69 @@ export default function App() {
                         </option>
                       ))}
                     </select>
+
+                    {/* Botón Exportar a Excel */}
+                    <button
+                      type="button"
+                      onClick={() => exportChequesToExcel(filteredCheques)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 transition cursor-pointer"
+                      title="Descargar listado de cheques filtrados en Excel (CSV)"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>Descargar Excel</span>
+                    </button>
+
+                    {/* Botón Imprimir */}
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+                      title="Imprimir listado completo de cheques"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Imprimir</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* PRINT HEADER FOR CHEQUES */}
+              <div className="hidden print:block mb-4 p-2 border-b-2 border-slate-900">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h1 className="text-xl font-black uppercase text-slate-950">
+                      Reporte de Gestión y Cartera de Cheques
+                    </h1>
+                    <p className="text-xs text-slate-700">
+                      Gremio / Policlínica AMOS • Período: {selectedMes} • Fecha de emisión: {getTodayLocalDate()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-slate-950">Total Registros: {filteredCheques.length}</p>
+                    <p className="text-xs font-black font-mono text-slate-950">
+                      Suma Total: {fmtMoney(filteredCheques.reduce((a, b) => a + b.importe, 0))}
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* TABLE OF CHEQUES */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
-                <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead className="bg-slate-950/80 sticky top-0 z-10 text-[11px] text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden print:border-none print:shadow-none print:bg-transparent">
+                <div className="overflow-x-auto max-h-[600px] print:max-h-none overflow-y-auto custom-scrollbar">
+                  <table className="w-full text-left border-collapse text-xs print:text-[10px]">
+                    <thead className="bg-slate-950/80 print:bg-slate-100 sticky top-0 z-10 text-[11px] print:text-[10px] text-slate-400 print:text-slate-900 uppercase tracking-wider font-semibold border-b border-slate-800 print:border-slate-900">
                       <tr>
-                        <th className="py-3 px-4">Estado / Vencimiento</th>
-                        <th className="py-3 px-3">Tipo / Formato</th>
-                        <th className="py-3 px-3">Titular / Beneficiario</th>
-                        <th className="py-3 px-4">Detalle / Referencia Bancaria</th>
-                        <th className="py-3 px-3">Emisión</th>
-                        <th className="py-3 px-4 text-right">Importe</th>
-                        <th className="py-3 px-3 text-center">Gestión</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2">Estado / Vencimiento</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2">Tipo / Formato</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2">Titular / Beneficiario</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2">Detalle / Referencia Bancaria</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2">Emisión</th>
+                        <th className="py-3 px-4 print:py-1.5 print:px-2 text-right">Importe</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2 text-center print:hidden">Gestión</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60 font-medium">
-                      {chequeAlerts.all
-                        .filter((item) => {
-                          if (chequeSearchTerm) {
-                            const term = chequeSearchTerm.toLowerCase()
-                            const matchEnt = item.entidad.toLowerCase().includes(term)
-                            const matchRef = item.chequeRef.toLowerCase().includes(term)
-                            const matchDet = (item.movimiento.detalle || '').toLowerCase().includes(term)
-                            if (!matchEnt && !matchRef && !matchDet) return false
-                          }
-
-                          if (chequeFilterTipo !== 'TODOS') {
-                            if (chequeFilterTipo === 'PROPIO' && item.tipo !== 'Propio') return false
-                            if (chequeFilterTipo === 'TERCERO' && item.tipo !== 'Tercero') return false
-                          }
-
-                          if (chequeFilterFormato !== 'TODOS') {
-                            if (chequeFilterFormato === 'ECHEQ' && item.formato !== 'E-Cheq') return false
-                            if (chequeFilterFormato === 'FISICO' && item.formato !== 'Físico') return false
-                          }
-
-                          if (chequeFilterEstado !== 'TODOS') {
-                            if (chequeFilterEstado === 'VENCIDO' && item.status !== 'VENCIDO') return false
-                            if (chequeFilterEstado === 'HOY' && item.status !== 'HOY') return false
-                            if (chequeFilterEstado === 'POR_VENCER' && item.status !== 'POR_VENCER') return false
-                            if (chequeFilterEstado === 'PAGADOS' && !item.isPagado) return false
-                            if (chequeFilterEstado === 'PENDIENTES' && item.isPagado) return false
-                          }
-
-                          if (chequeFilterMes !== 'TODOS') {
-                            if (chequeFilterMes === 'ACTIVO') {
-                              if (item.movimiento.mesPeriodo && item.movimiento.mesPeriodo.trim() !== selectedMes.trim()) return false
-                            } else {
-                              if (item.movimiento.mesPeriodo && item.movimiento.mesPeriodo.trim() !== chequeFilterMes.trim()) return false
-                            }
-                          }
-
-                          return true
-                        })
-                        .map((item) => {
+                    <tbody className="divide-y divide-slate-800/60 print:divide-slate-300 font-medium">
+                      {filteredCheques.map((item) => {
                           const isVencido = item.status === 'VENCIDO'
                           const isHoy = item.status === 'HOY'
                           const isPorVencer = item.status === 'POR_VENCER'
