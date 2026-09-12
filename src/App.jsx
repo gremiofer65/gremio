@@ -1246,11 +1246,15 @@ export default function App() {
       const entidad = m.empresaConcepto || 'Sin Especificar'
       const isPagado = !!m.fechaPago
 
-      let status = 'AL_DIA' // 'VENCIDO' | 'HOY' | 'POR_VENCER' | 'EN_PERIODO' | 'FUTURO'
-      let severity = 'info' // 'danger' | 'warning' | 'today' | 'info'
+      let status = 'AL_DIA' // 'PAGADO' | 'VENCIDO' | 'HOY' | 'POR_VENCER' | 'EN_PERIODO' | 'FUTURO'
+      let severity = 'info' // 'success' | 'danger' | 'warning' | 'today' | 'info'
       let label = ''
 
-      if (diffDays < 0) {
+      if (isPagado) {
+        status = 'PAGADO'
+        severity = 'success'
+        label = m.fechaPago ? `✓ Cobrado / Pagado (${m.fechaPago})` : '✓ Cobrado / Pagado'
+      } else if (diffDays < 0) {
         status = 'VENCIDO'
         severity = 'danger'
         label = `Vencido hace ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'día' : 'días'}`
@@ -1290,14 +1294,19 @@ export default function App() {
       })
     })
 
-    // Ordenar: primero los más críticos (vencidos, hoy, próximos a vencer)
-    alerts.sort((a, b) => a.diffDays - b.diffDays)
+    // Ordenar: primero los más críticos (vencidos sin pagar, hoy, próximos a vencer, etc.)
+    alerts.sort((a, b) => {
+      if (a.isPagado && !b.isPagado) return 1
+      if (!a.isPagado && b.isPagado) return -1
+      return a.diffDays - b.diffDays
+    })
 
-    const criticos = alerts.filter((a) => a.status === 'VENCIDO' || a.status === 'HOY' || a.status === 'POR_VENCER')
-    const vencidosCount = alerts.filter((a) => a.status === 'VENCIDO').length
-    const hoyCount = alerts.filter((a) => a.status === 'HOY').length
-    const porVencerCount = alerts.filter((a) => a.status === 'POR_VENCER').length
-    const enPeriodoCount = alerts.filter((a) => a.status === 'EN_PERIODO').length
+    const criticos = alerts.filter((a) => !a.isPagado && (a.status === 'VENCIDO' || a.status === 'HOY' || a.status === 'POR_VENCER'))
+    const vencidosCount = alerts.filter((a) => !a.isPagado && a.status === 'VENCIDO').length
+    const hoyCount = alerts.filter((a) => !a.isPagado && a.status === 'HOY').length
+    const porVencerCount = alerts.filter((a) => !a.isPagado && a.status === 'POR_VENCER').length
+    const enPeriodoCount = alerts.filter((a) => !a.isPagado && a.status === 'EN_PERIODO').length
+    const pagadosCount = alerts.filter((a) => a.isPagado).length
 
     return {
       all: alerts,
@@ -1306,6 +1315,7 @@ export default function App() {
       hoyCount,
       porVencerCount,
       enPeriodoCount,
+      pagadosCount,
       totalAlertas: criticos.length
     }
   }, [movimientos, selectedMes])
@@ -4064,9 +4074,10 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 print:divide-slate-300 font-medium">
                       {filteredCheques.map((item) => {
-                          const isVencido = item.status === 'VENCIDO'
-                          const isHoy = item.status === 'HOY'
-                          const isPorVencer = item.status === 'POR_VENCER'
+                          const isPagado = item.isPagado || item.status === 'PAGADO'
+                          const isVencido = !isPagado && item.status === 'VENCIDO'
+                          const isHoy = !isPagado && item.status === 'HOY'
+                          const isPorVencer = !isPagado && item.status === 'POR_VENCER'
 
                           return (
                             <tr
@@ -4079,7 +4090,9 @@ export default function App() {
                                 <div className="flex flex-col gap-1">
                                   <span
                                     className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border w-fit ${
-                                      isVencido
+                                      isPagado
+                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-semibold'
+                                        : isVencido
                                         ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
                                         : isHoy
                                         ? 'bg-red-500 text-white font-extrabold border-red-400 animate-pulse'
@@ -4088,6 +4101,7 @@ export default function App() {
                                         : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                                     }`}
                                   >
+                                    {isPagado && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />}
                                     {isVencido && <AlertTriangle className="w-2.5 h-2.5" />}
                                     {isHoy && <Zap className="w-2.5 h-2.5" />}
                                     {isPorVencer && <Clock className="w-2.5 h-2.5" />}
