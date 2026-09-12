@@ -2094,75 +2094,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Period & Year Selector */}
-          {!isSidebarCollapsed ? (
-            <div className="p-3.5 md:p-4 space-y-2 border-b border-slate-800/80 bg-slate-950/40">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Año / Ejercicio
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsNewPeriodModalOpen(true)
-                    setIsMobileSidebarOpen(false)
-                  }}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition cursor-pointer"
-                  title="Crear un nuevo período"
-                >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Nuevo</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500 font-bold cursor-pointer"
-                  >
-                    <option value="TODOS">Todos</option>
-                    {availableYears.map((y) => (
-                      <option key={y} value={y}>
-                        Año {y}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <select
-                    value={selectedMes}
-                    onChange={(e) => setSelectedMes(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
-                  >
-                    {filteredPeriods.length === 0 ? (
-                      <option value="">Sin períodos</option>
-                    ) : (
-                      filteredPeriods.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="hidden md:flex flex-col items-center py-2.5 border-b border-slate-800/80 bg-slate-950/40">
-              <button
-                type="button"
-                onClick={() => setIsSidebarCollapsed(false)}
-                className="px-2 py-1 rounded text-[10px] font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition text-center"
-                title={`Período activo: ${selectedMes} (Click para expandir)`}
-              >
-                {selectedMes.slice(0, 3)}
-              </button>
-            </div>
-          )}
-
           {/* Navigation Links */}
           <nav className={`px-2 md:px-3 space-y-1.5 mt-3 ${isSidebarCollapsed ? 'md:px-2' : ''}`}>
             <button
@@ -2361,9 +2292,11 @@ export default function App() {
                 {activeTab === 'maestros' && 'Tablas Maestras'}
               </h2>
             </div>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
-              {selectedMes}
-            </span>
+            {(activeTab === 'libro' || activeTab === 'dashboard') && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
+                {selectedMes}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
@@ -3045,6 +2978,78 @@ export default function App() {
           {/* TAB 2: LIBRO DIARIO / CAJA */}
           {activeTab === 'libro' && (
             <div className="space-y-4">
+              {/* SELECTOR DE EJERCICIO / AÑO / PERÍODO */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg flex flex-wrap items-center justify-between gap-3 print:hidden">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">
+                        Año / Ejercicio:
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        {selectedMes}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Libro Diario y Caja correspondientes a este período contable
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Selector Año */}
+                  <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5">
+                    <span className="text-[11px] text-slate-400 font-semibold">Año:</span>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(e.target.value)}
+                      className="bg-transparent text-xs text-white font-bold focus:outline-none cursor-pointer"
+                    >
+                      <option value="TODOS" className="bg-slate-900 text-white">Todos</option>
+                      {availableYears.map((y) => (
+                        <option key={y} value={y} className="bg-slate-900 text-white">
+                          Año {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Selector Mes / Período */}
+                  <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5">
+                    <span className="text-[11px] text-slate-400 font-semibold">Mes:</span>
+                    <select
+                      value={selectedMes}
+                      onChange={(e) => setSelectedMes(e.target.value)}
+                      className="bg-transparent text-xs text-white font-bold focus:outline-none cursor-pointer"
+                    >
+                      {filteredPeriods.length === 0 ? (
+                        <option value="" className="bg-slate-900 text-white">Sin períodos</option>
+                      ) : (
+                        filteredPeriods.map((m) => (
+                          <option key={m} value={m} className="bg-slate-900 text-white">
+                            {m}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  {/* Botón Nuevo Período */}
+                  <button
+                    type="button"
+                    onClick={() => setIsNewPeriodModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition cursor-pointer shadow-md shadow-blue-600/20"
+                    title="Crear un nuevo período / ejercicio contable"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Nuevo Período</span>
+                  </button>
+                </div>
+              </div>
+
               {/* STATS STRIP */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-slate-900 border border-slate-800/80 rounded-xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
