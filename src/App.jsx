@@ -1217,9 +1217,14 @@ export default function App() {
     const alerts = []
 
     movimientos.forEach((m) => {
-      const ref = m.chequeOperacion || ''
+      const ref = `${m.chequeOperacion || ''} ${m.detalle || ''} ${m.facturaNro || ''}`
       const upper = ref.toUpperCase()
-      const isCheque = upper.includes('CHEQUE') || upper.includes('CHQ') || upper.includes('ECHEQ')
+      const isCheque =
+        upper.includes('CHEQUE') ||
+        upper.includes('CHQ') ||
+        upper.includes('ECHEQ') ||
+        upper.includes('E-CHEQ') ||
+        (m.facturaNro && (m.facturaNro.startsWith('CHQ') || m.facturaNro.startsWith('ECHQ')))
       if (!isCheque) return
 
       // Extraer fecha de cobro/vencimiento si existe
@@ -1276,6 +1281,8 @@ export default function App() {
         label = `A cobrar/pagar el ${effectiveDateStr}`
       }
 
+      const isECheq = upper.includes('ECHEQ') || upper.includes('E-CHEQ') || upper.includes('ELECTR')
+
       alerts.push({
         id: m.id,
         movimiento: m,
@@ -1287,9 +1294,9 @@ export default function App() {
         severity,
         label,
         isPagado,
-        chequeRef: ref,
+        chequeRef: m.chequeOperacion || ref,
         tipo: upper.includes('TERCERO') ? 'Tercero' : 'Propio',
-        formato: upper.includes('ECHEQ') ? 'E-Cheq' : 'Físico',
+        formato: isECheq ? 'E-Cheq' : 'Físico',
         rubro: m.rubro
       })
     })
