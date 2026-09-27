@@ -1,6 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import initialData from './initialData.json'
 import { supabase } from './lib/supabaseClient'
+import CajaDiaria from './components/CajaDiaria'
+import LibroIvaCompras from './components/LibroIvaCompras'
+import OrdenesPagoModal from './components/OrdenesPagoModal'
+import ModuloBancos from './components/ModuloBancos'
 import {
   LayoutDashboard,
   BookOpen,
@@ -54,7 +58,10 @@ import {
   AlertTriangle,
   Download,
   Ban,
-  RotateCcw
+  RotateCcw,
+  ArrowUpDown,
+  Lock,
+  Unlock
 } from 'lucide-react'
 import {
   BarChart,
@@ -196,18 +203,28 @@ const defaultMaestros = {
   conceptosGastos: [
     'Asesoramiento',
     'Comisiones Bancarias',
+    'Cta. Bco. 10551/45',
     'Equipamiento e Instalaciones',
     'Gastos Generales',
     'Gastos Gremiales',
+    'Gastos Policlinico',
+    'Honorarios',
+    'Imprenta y Utiles',
     'Impuestos y Tasas',
     'Insumos Médicos y Odontológicos',
-    'Librería e Imprenta',
     'Limpieza y Desinfección',
-    'Lub. y Combustibles',
+    'Lubricantes y Combustibles',
+    'Luz Sede Social',
+    'Mantenimiento y Mejoras',
+    'Mejoras C. de Depor. (salón)',
     'Publicidad',
     'Seguros',
-    'Servicios y Mantenimiento',
-    'Sueldos / Cargas Sociales'
+    'Serv. Cont. Y Aseso.',
+    'Servicios de Farmacia',
+    'Subsidios',
+    'Sueldos y Cs Sociales',
+    'Utiles Escolares (vaucher)',
+    'Otros Egresos'
   ],
   conceptosHonorarios: [
     'Hon Ene 26',
@@ -239,16 +256,25 @@ const defaultMaestros = {
     'Alquiler Campo de Deportes / Salón',
     'Alquiler Consultorios',
     'Billeteras (Locación Consultorios)',
+    'Caja',
     'CENS (Centro Nivel Secundario)',
+    'Centro Cultural',
     'CFL (Centro Formación Laboral)',
     'Consultas Médicas',
+    'Cuota Jubilados',
     'Enfermería',
+    'FAMS',
     'IAM SEGURO',
     'La Estrella Seg de Retiro',
+    'Loc. Policlinico',
     'Odontología',
+    'Operaciones en Banco',
     'Prácticas Médicas',
+    'Transferencia entre cuentas',
     'Uso Natatorio',
-    'Venta Cantina'
+    'Valores a Depositar',
+    'Venta Cantina',
+    'Otros Ingresos'
   ],
   impuestos: initialData.maestros?.impuestos ? sortAlphabetical(initialData.maestros.impuestos) : [
     'AFIP / ARCA',
@@ -256,6 +282,79 @@ const defaultMaestros = {
     'Municipalidad de Chivilcoy',
     'Seguridad e Higiene'
   ]
+}
+
+const defaultMaestrosCuit = {
+  // Médicos y Profesionales
+  'Alfonso Pablo Anibal': '20-17467749-3',
+  'Altube María Soledad': '27-28601724-5',
+  'Arguello Elisabet Claudia': '27-20812241-5',
+  'Banchero Maria Cecilia': '27-13453424-4',
+  'Bartoli Sergio Mario': '23-16301168-9',
+  'Bonfigli Agustin': '20-29235525-5',
+  'Caja Medicos Pcia Bs As': '30-68273765-0',
+  'Capobianco Luis Antonio': '20-16016851-0',
+  'CardioVascular Chivilcoy SRL': '30-71182196-8',
+  'De Gaetani Carlos': '20-18136499-9',
+  'Diagnost  Por Imágenes del Oeste SA (DIO)': '30-71137372-8',
+  'Diagnostico Medico Chivilcoy SA': '30-71278860-3',
+  'Diagnostico Por Imágenes del Oeste SA': '30-71137372-8',
+  'Dipierrro Daniel Rodolfo': '20-13453109-7',
+  'Falchettoni Mariano Miguel': '20-21826565-1',
+  'Ferro Jose Miguel': '20-22738783-2',
+  'Hohmann Cecilia Ana': '27-29812923-5',
+  'Instituto Oftalmologico del Noroeste SA': '30-66500762-2',
+  'Lopardo Norberto Raul': '20-29004599-2',
+  'M.R.I. Buenos Aires SA': '30-69458426-4',
+  'Mazzaro Esteban': '20-20573509-8',
+  'Novas Martin': '20-29867151-5',
+  'Perdomenico Maria Reina': '27-23942569-6',
+  'Puchetta Maria Belen': '27-23455488-9',
+  'Rattagan María Lucía': '27-31915107-4',
+  'Rivero Mariano Adolfo': '20-23391107-1',
+  'Villegas Adrian Pablo': '20-26175725-8',
+  'Wolter Pamela Siomara': '27-30683276-6',
+  'Dal Pozzo Maria Florencia (…4894831316)': '27-29940948-7',
+  'Dal Pozzo Maria Florencia': '27-29940948-7',
+
+  // Proveedores y Empresas
+  'Red Link S A': '33-62974985-9',
+  'Movistar': '30-67881435-7',
+  'IE Emergencias Bolivar SA': '30-70908009-8',
+  'Soma S.A.': '30-61608997-4',
+  'Santorini - El Relámpago SA': '30-66517672-6',
+  'Establecimiento San Ceferino SA  SPA': '33-65188101-9',
+  'Establecimiento San Ceferino SA': '33-65188101-9',
+  'ENCODESA Firma Digital': '30-71110353-4',
+  'Encode S.A.': '30-71110353-4',
+  'Lagrace Comunicaciones SRL Adolfo': '30-65903401-4',
+  'Lagrace Comunicaciones SRL': '30-65903401-4',
+  'Bata SRL': '30-70840732-8',
+  'Aguas Certificadas el Oeste SA': '30-70815220-6',
+  'Bringeri Hogar Total S. A.': '30-71072438-1',
+  'Dattatec.com SRL "donweb" NUBE': '30-71017365-2',
+  'Eden': '30-69383434-8',
+  'Night Life Srl': '30-71600670-7',
+  'CAUDA SILVIO GERMAN': '20-23455439-6',
+  'LA FABRICA SH': '30-70952361-5',
+  'Ricser Junin Srl': '30-71212351-2',
+  'MANGINO SEBASTIAN ADOLFO': '20-22738632-1',
+  'Emprendimientos Meat': '30-71725473-9',
+  'SANGRE Y TIERRA SA': '30-71612828-4',
+  'SEBASTIAN ALBERTO FALCONE': '23-17865042-4',
+  'MAURICIO FABIAN CERDAN': '20-23052691-6',
+  'LOGISTICA GORMET SA': '30-71515958-5',
+  'MARIA FLORENCIA REPETTO': '27-32208740-9',
+  'FAECyS': '30-52599763-7',
+  'ARBA': '30-71165691-6',
+  'ARCA Vep 931': '33-69345023-9',
+  'AFIP / ARCA': '33-69345023-9',
+  'IAM SEGURO': '30-50003923-4',
+  'La Estrella Seg de Retiro': '30-65487621-3',
+  'Sind.U de Guardavidas': '30-68541298-2',
+  'Bomberos Voluntarios Chivilcoy': '30-67123456-1',
+  'CHIVILCOY S.A.': '30-55298014-6',
+  'FRIGORIFICO Y MATADERO CHIVILCOY S.A.': '30-63153679-0'
 }
 
 export default function App() {
@@ -339,11 +438,89 @@ export default function App() {
   }
 
   // Navigation
-  const [activeTab, setActiveTab] = useState('cuentacorriente') // 'cuentacorriente' | 'libro' | 'dashboard' | 'medicos' | 'maestros'
+  const [activeTab, setActiveTab] = useState('cuentacorriente') // 'cuentacorriente' | 'libro' | 'dashboard' | 'medicos' | 'maestros' | 'ivacompras' | 'bancos'
   const [selectedMes, setSelectedMes] = useState('ENERO 26')
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isMobileCCDetailOpen, setIsMobileCCDetailOpen] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+
+  // Cierre y Bloqueo de Períodos Contables
+  const [periodosCerrados, setPeriodosCerrados] = useState(() => {
+    try {
+      const saved = localStorage.getItem('periodos_cerrados_v1')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {}
+    return {}
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('periodos_cerrados_v1', JSON.stringify(periodosCerrados))
+    } catch (e) {}
+  }, [periodosCerrados])
+
+  const isCurrentPeriodoCerrado = !!periodosCerrados[selectedMes]
+
+  const handleToggleCerrarPeriodo = (periodo = selectedMes) => {
+    const isCurrentlyClosed = !!periodosCerrados[periodo]
+    const action = isCurrentlyClosed ? 'REABRIR' : 'CERRAR Y BLOQUEAR'
+    
+    if (
+      !window.confirm(
+        `¿Deseas ${action} el período contable "${periodo}"?\n\n${
+          isCurrentlyClosed
+            ? 'Al reabrirlo, se permitirán nuevamente cargas y modificaciones en este período.'
+            : 'Al cerrarlo, quedará protegido contra escritura para garantizar la inmutabilidad de los registros contables.'
+        }`
+      )
+    ) {
+      return
+    }
+
+    setPeriodosCerrados((prev) => ({
+      ...prev,
+      [periodo]: !isCurrentlyClosed
+    }))
+  }
+
+  // Modal y Emisión de Órdenes de Pago (OP)
+  const [isOpModalOpen, setIsOpModalOpen] = useState(false)
+  const [opBeneficiarioInicial, setOpBeneficiarioInicial] = useState('')
+
+  const handleEmitirOP = async (opData) => {
+    const idsToUpdate = opData.comprobantesIds || []
+    if (idsToUpdate.length === 0) return
+
+    const refPago = `OP ${opData.numero} [${opData.mediosPago.totalEntregado ? fmtMoney(opData.mediosPago.totalEntregado) : ''}]`
+
+    setMovimientos((prev) =>
+      prev.map((m) => {
+        if (idsToUpdate.includes(m.id)) {
+          return {
+            ...m,
+            fechaPago: opData.fecha,
+            chequeOperacion: refPago
+          }
+        }
+        return m
+      })
+    )
+
+    // Guardar en Supabase
+    try {
+      for (const id of idsToUpdate) {
+        await supabase
+          .from('movimientos')
+          .update({
+            fecha_pago: opData.fecha,
+            cheque_operacion: refPago
+          })
+          .eq('id', id)
+      }
+    } catch (err) {
+      console.error('Error actualizando comprobantes pagados en Supabase:', err)
+    }
+  }
 
   // Data state
   const [movimientos, setMovimientos] = useState(initialData.movimientos || initialData.movimientosEnero || [])
@@ -355,6 +532,20 @@ export default function App() {
     })
     return sorted
   })
+  const [maestrosCuit, setMaestrosCuit] = useState(() => {
+    try {
+      const saved = localStorage.getItem('maestros_cuit_v1')
+      if (saved) return { ...defaultMaestrosCuit, ...JSON.parse(saved) }
+    } catch (e) {}
+    return defaultMaestrosCuit
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('maestros_cuit_v1', JSON.stringify(maestrosCuit))
+    } catch (e) {}
+  }, [maestrosCuit])
+
   const [meses, setMeses] = useState(() => {
     const defaultMeses = [
       'ENERO 26',
@@ -388,9 +579,13 @@ export default function App() {
       const { data: dbMaestros } = await supabase.from('maestros').select('*')
       if (dbMaestros && dbMaestros.length > 0) {
         const grouped = {}
+        const cuitMap = {}
         dbMaestros.forEach((item) => {
           if (!grouped[item.categoria]) grouped[item.categoria] = []
           grouped[item.categoria].push(item.nombre)
+          if (item.cuit) {
+            cuitMap[item.nombre] = item.cuit
+          }
         })
         setMaestros((prev) => {
           const merged = { ...prev }
@@ -400,6 +595,9 @@ export default function App() {
           })
           return merged
         })
+        if (Object.keys(cuitMap).length > 0) {
+          setMaestrosCuit((prev) => ({ ...prev, ...cuitMap }))
+        }
       }
 
       // 3. Cargar Movimientos
@@ -533,6 +731,7 @@ export default function App() {
   // Tablas Maestras CRUD state
   const [activeCatalogTab, setActiveCatalogTab] = useState('proveedores')
   const [newItemName, setNewItemName] = useState('')
+  const [newItemCuit, setNewItemCuit] = useState('')
   const [editingItem, setEditingItem] = useState(null)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false)
@@ -550,9 +749,48 @@ export default function App() {
     impuestos: 'Impuestos y Organismos'
   }
 
+  // Elementos a mostrar en Tablas Maestras (Búsqueda en TODAS las tablas o en la activa)
+  const displayedCatalogItems = useMemo(() => {
+    const q = catalogSearch.trim().toLowerCase()
+    if (!q) {
+      const list = sortAlphabetical(maestros[activeCatalogTab] || [])
+      return list.map((item, index) => ({
+        catalogKey: activeCatalogTab,
+        item,
+        index,
+        isGlobal: false
+      }))
+    }
+
+    const results = []
+    Object.keys(maestros).forEach((catKey) => {
+      const list = maestros[catKey] || []
+      list.forEach((item) => {
+        const itemCuit = (maestrosCuit[item] || '').toLowerCase()
+        const catLabel = (catalogLabels[catKey] || catKey).toLowerCase()
+        if (
+          item.toLowerCase().includes(q) ||
+          itemCuit.includes(q) ||
+          catLabel.includes(q)
+        ) {
+          results.push({
+            catalogKey: catKey,
+            item,
+            isGlobal: true
+          })
+        }
+      })
+    })
+
+    return results
+      .sort((a, b) => a.item.localeCompare(b.item, 'es'))
+      .map((r, index) => ({ ...r, index }))
+  }, [maestros, maestrosCuit, activeCatalogTab, catalogSearch, catalogLabels])
+
   // Handlers for Tablas Maestras con Supabase
   const handleAddItem = async (catalogKey) => {
     const trimmed = newItemName.trim()
+    const trimmedCuit = newItemCuit.trim()
     if (!trimmed) return
 
     setMaestros((prev) => {
@@ -566,12 +804,20 @@ export default function App() {
         [catalogKey]: sortAlphabetical([...list, trimmed])
       }
     })
+
+    if (trimmedCuit) {
+      setMaestrosCuit((prev) => ({
+        ...prev,
+        [trimmed]: trimmedCuit
+      }))
+    }
     setNewItemName('')
+    setNewItemCuit('')
 
     // Persistir en Supabase
     try {
       await supabase.from('maestros').upsert([
-        { categoria: catalogKey, nombre: trimmed, activo: true }
+        { categoria: catalogKey, nombre: trimmed, cuit: trimmedCuit || null, activo: true }
       ], { onConflict: 'categoria,nombre' })
     } catch (err) {
       console.error('Error guardando en maestros en Supabase:', err)
@@ -600,13 +846,20 @@ export default function App() {
   }
 
   const handleStartEdit = (catalogKey, item) => {
-    setEditingItem({ catalogKey, oldVal: item, newVal: item })
+    setEditingItem({
+      catalogKey,
+      oldVal: item,
+      newVal: item,
+      oldCuit: maestrosCuit[item] || '',
+      newCuit: maestrosCuit[item] || ''
+    })
   }
 
   const handleSaveEdit = async () => {
     if (!editingItem) return
-    const { catalogKey, oldVal, newVal } = editingItem
+    const { catalogKey, oldVal, newVal, newCuit } = editingItem
     const trimmed = newVal.trim()
+    const trimmedCuit = (newCuit || '').trim()
     if (!trimmed) return
 
     setMaestros((prev) => {
@@ -616,6 +869,19 @@ export default function App() {
         ...prev,
         [catalogKey]: sortAlphabetical(updated)
       }
+    })
+
+    setMaestrosCuit((prev) => {
+      const copy = { ...prev }
+      if (oldVal !== trimmed) {
+        delete copy[oldVal]
+      }
+      if (trimmedCuit) {
+        copy[trimmed] = trimmedCuit
+      } else {
+        delete copy[trimmed]
+      }
+      return copy
     })
 
     // Propagate name change to active movimientos
@@ -640,7 +906,12 @@ export default function App() {
     // Persistir en Supabase
     try {
       await supabase.from('maestros').delete().match({ categoria: catalogKey, nombre: oldVal })
-      await supabase.from('maestros').insert({ categoria: catalogKey, nombre: trimmed, activo: true })
+      await supabase.from('maestros').insert({
+        categoria: catalogKey,
+        nombre: trimmed,
+        cuit: trimmedCuit || null,
+        activo: true
+      })
       await supabase.from('movimientos').update({ empresa_concepto: trimmed }).match({ empresa_concepto: oldVal })
     } catch (err) {
       console.error('Error actualizando maestro en Supabase:', err)
@@ -658,6 +929,12 @@ export default function App() {
       }
     })
 
+    setMaestrosCuit((prev) => {
+      const copy = { ...prev }
+      delete copy[itemToDelete]
+      return copy
+    })
+
     // Persistir eliminación en Supabase
     try {
       await supabase.from('maestros').delete().match({ categoria: catalogKey, nombre: itemToDelete })
@@ -666,10 +943,45 @@ export default function App() {
     }
   }
 
+  // Helper para actualizar o agregar CUIT / CUIL de cualquier entidad en tiempo real
+  const handleUpdateEntityCuit = async (entityName, newCuitValue, catalogCategory = null) => {
+    const trimmedEntity = (entityName || '').trim()
+    const trimmedCuit = (newCuitValue || '').trim()
+    if (!trimmedEntity) return
+
+    setMaestrosCuit((prev) => {
+      const copy = { ...prev }
+      if (trimmedCuit) {
+        copy[trimmedEntity] = trimmedCuit
+      } else {
+        delete copy[trimmedEntity]
+      }
+      return copy
+    })
+
+    // Detect category if not provided
+    let cat = catalogCategory
+    if (!cat) {
+      if ((maestros.medicos || []).includes(trimmedEntity)) cat = 'medicos'
+      else if ((maestros.empleados || []).includes(trimmedEntity)) cat = 'empleados'
+      else if ((maestros.impuestos || []).includes(trimmedEntity)) cat = 'impuestos'
+      else cat = 'proveedores'
+    }
+
+    try {
+      await supabase.from('maestros').upsert([
+        { categoria: cat, nombre: trimmedEntity, cuit: trimmedCuit || null, activo: true }
+      ], { onConflict: 'categoria,nombre' })
+    } catch (err) {
+      console.error('Error guardando CUIT en Supabase:', err)
+    }
+  }
+
   // Search & Filter for Libro Diario
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRubro, setSelectedRubro] = useState('TODOS')
   const [selectedSede, setSelectedSede] = useState('TODAS')
+  const [diarioSortOrder, setDiarioSortOrder] = useState('asc') // 'asc' (Cronológico) | 'desc' (Inverso)
   const [medicosPagoFilter, setMedicosPagoFilter] = useState('TODOS') // 'TODOS' | 'PENDIENTES' | 'PAGADOS'
 
   // Search & Filter for Cheques Module
@@ -712,6 +1024,13 @@ export default function App() {
     chequeCuit: '',
     chequeCruzado: false,
     chequeNoALaOrden: false,
+    // Desglose Fiscal e IVA (Libro IVA Compras)
+    tipoComprobante: type === 'MEDICO' ? 'FACTURA_C' : type === 'INGRESO' ? 'RECIBO' : 'FACTURA_B',
+    netoGravado: '',
+    alicuotaIva: 21,
+    ivaImporte: '',
+    ivaNoGravado: '',
+    percepciones: '',
     // Egresos
     pagosS: '',
     // Medicos
@@ -808,27 +1127,69 @@ export default function App() {
     }
   }, [movimientos, selectedMes])
 
-  // Filtered movements for Libro Diario
-  const filteredMovimientos = useMemo(() => {
-    return movimientos.filter((m) => {
-      if (selectedMes && m.mesPeriodo && m.mesPeriodo.trim() !== selectedMes.trim()) {
-        return false
+  // Helper para obtener la fecha efectiva para ordenar por Fecha Pago / Ref.
+  const getFechaPagoRefSortKey = (m) => {
+    if (m.fechaPago && typeof m.fechaPago === 'string' && m.fechaPago.trim() !== '') {
+      const fp = m.fechaPago.trim()
+      if (fp.includes('T')) return fp.split('T')[0]
+      if (fp.includes('/')) {
+        const parts = fp.split('/')
+        if (parts.length === 3) {
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+        }
       }
+      return fp
+    }
+    const ref = `${m.chequeOperacion || ''} ${m.detalle || ''}`
+    const cobroMatch = ref.match(/(?:cobro|pago|fecha)[:\s]*([0-9]{4}-[0-9]{2}-[0-9]{2})/i)
+    if (cobroMatch) return cobroMatch[1]
+    const slashMatch = ref.match(/(?:cobro|pago|fecha)[:\s]*([0-9]{1,2})\/([0-9]{1,2})\/([0-9]{4})/i)
+    if (slashMatch) {
+      return `${slashMatch[3]}-${slashMatch[2].padStart(2, '0')}-${slashMatch[1].padStart(2, '0')}`
+    }
+    if (m.fecha) {
+      const f = String(m.fecha).trim()
+      return f.includes('T') ? f.split('T')[0] : f
+    }
+    return '9999-99-99'
+  }
 
-      const matchSearch =
-        searchTerm === '' ||
-        (m.empresaConcepto && m.empresaConcepto.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (m.facturaNro && m.facturaNro.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (m.detalle && m.detalle.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (m.detalleExtenso && m.detalleExtenso.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (m.chequeOperacion && m.chequeOperacion.toLowerCase().includes(searchTerm.toLowerCase()))
+  // Filtered and sorted movements for Libro Diario (ordenado por Fecha Pago / Ref.)
+  const filteredMovimientos = useMemo(() => {
+    return movimientos
+      .filter((m) => {
+        if (selectedMes && m.mesPeriodo && m.mesPeriodo.trim() !== selectedMes.trim()) {
+          return false
+        }
 
-      const matchRubro = selectedRubro === 'TODOS' || m.rubro === selectedRubro
-      const matchSede = selectedSede === 'TODAS' || m.realizadoEn === selectedSede
+        const matchSearch =
+          searchTerm === '' ||
+          (m.empresaConcepto && m.empresaConcepto.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (m.facturaNro && m.facturaNro.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (m.detalle && m.detalle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (m.detalleExtenso && m.detalleExtenso.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (m.chequeOperacion && m.chequeOperacion.toLowerCase().includes(searchTerm.toLowerCase()))
 
-      return matchSearch && matchRubro && matchSede
-    })
-  }, [movimientos, selectedMes, searchTerm, selectedRubro, selectedSede])
+        const matchRubro = selectedRubro === 'TODOS' || m.rubro === selectedRubro
+        const matchSede = selectedSede === 'TODAS' || m.realizadoEn === selectedSede
+
+        return matchSearch && matchRubro && matchSede
+      })
+      .sort((a, b) => {
+        const dateA = getFechaPagoRefSortKey(a)
+        const dateB = getFechaPagoRefSortKey(b)
+        let comp = 0
+        if (dateA !== dateB) {
+          comp = dateA.localeCompare(dateB)
+        } else {
+          const fA = a.fecha || ''
+          const fB = b.fecha || ''
+          if (fA !== fB) comp = fA.localeCompare(fB)
+          else comp = String(a.id || '').localeCompare(String(b.id || ''))
+        }
+        return diarioSortOrder === 'desc' ? -comp : comp
+      })
+  }, [movimientos, selectedMes, searchTerm, selectedRubro, selectedSede, diarioSortOrder])
 
   // ================= CUENTA CORRIENTE ENGINE =================
   const entidadesCC = useMemo(() => {
@@ -1380,8 +1741,9 @@ export default function App() {
       return a.diffDays - b.diffDays
     })
 
-    const criticos = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && (a.status === 'VENCIDO' || a.status === 'HOY' || a.status === 'POR_VENCER'))
-    const vencidosCount = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && a.status === 'VENCIDO').length
+    // Alertas críticas: ÚNICAMENTE los cheques vencidos (sin cobrar / sin pagar)
+    const criticos = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && a.status === 'VENCIDO')
+    const vencidosCount = criticos.length
     const hoyCount = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && a.status === 'HOY').length
     const porVencerCount = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a) && a.status === 'POR_VENCER').length
     const activosCount = alerts.filter((a) => !a.isPagado && !isSpecialClosed(a)).length
@@ -1401,7 +1763,7 @@ export default function App() {
       anuladosCount,
       caducadosCount,
       devueltosCount,
-      totalAlertas: criticos.length
+      totalAlertas: vencidosCount
     }
   }, [movimientos, selectedMes])
 
@@ -1521,6 +1883,19 @@ export default function App() {
         const bruto = parseFloat(prev.pagosMed) || 0
         const ret = parseFloat(value) || 0
         updated.netoPagadoMed = (bruto - ret).toFixed(2)
+      } else if (field === 'netoGravado' || field === 'alicuotaIva' || field === 'ivaNoGravado' || field === 'percepciones') {
+        const neto = parseFloat(field === 'netoGravado' ? value : prev.netoGravado) || 0
+        const alic = parseFloat(field === 'alicuotaIva' ? value : prev.alicuotaIva) || 0
+        const noGrav = parseFloat(field === 'ivaNoGravado' ? value : prev.ivaNoGravado) || 0
+        const percep = parseFloat(field === 'percepciones' ? value : prev.percepciones) || 0
+
+        const ivaCalc = neto * (alic / 100)
+        const totalCalc = neto + ivaCalc + noGrav + percep
+
+        updated.ivaImporte = ivaCalc > 0 ? ivaCalc.toFixed(2) : '0.00'
+        if (totalCalc > 0 && modalType === 'EGRESO') {
+          updated.pagosS = totalCalc.toFixed(2)
+        }
       }
 
       return updated
@@ -1538,8 +1913,12 @@ export default function App() {
     setFormData(getCleanFormData(modalType))
   }
 
-  // Open modal for new creation (siempre 100% limpio y sin datos residuales)
+  // Open modal for new creation (siempre 100% limpio y con verificación de período bloqueado)
   const handleOpenCreateModal = (type = 'EGRESO') => {
+    if (isCurrentPeriodoCerrado) {
+      alert(`⚠️ PERÍODO CONTABLE CERRADO:\n\nEl período "${selectedMes}" se encuentra cerrado y bloqueado para garantizar la inmutabilidad de los registros contables.\n\nPara cargar nuevos movimientos, debe reabrir el período desde la barra superior.`)
+      return
+    }
     setEditingId(null)
     setModalType(type)
     setIsDropdownOpen(false)
@@ -1630,6 +2009,13 @@ export default function App() {
       chequeCuit: parsedChequeCuit,
       chequeCruzado: parsedChequeCruzado,
       chequeNoALaOrden: parsedChequeNoALaOrden,
+      // Desglose fiscal
+      tipoComprobante: mov.tipoComprobante || (mov.rubro === 'MÉDICO' ? 'FACTURA_C' : mov.rubro === 'INGRESOS' ? 'RECIBO' : 'FACTURA_B'),
+      netoGravado: mov.netoGravado !== undefined && mov.netoGravado !== null ? String(mov.netoGravado) : '',
+      alicuotaIva: mov.alicuotaIva !== undefined && mov.alicuotaIva !== null ? mov.alicuotaIva : 21,
+      ivaImporte: mov.ivaImporte !== undefined && mov.ivaImporte !== null ? String(mov.ivaImporte) : '',
+      ivaNoGravado: mov.ivaNoGravado !== undefined && mov.ivaNoGravado !== null ? String(mov.ivaNoGravado) : '',
+      percepciones: mov.percepciones !== undefined && mov.percepciones !== null ? String(mov.percepciones) : '',
       pagosS: mov.pagosS ? String(mov.pagosS) : '',
       pagosMed: mov.pagosMed ? String(mov.pagosMed) : '',
       aplicarRetencion: hasRet,
@@ -1757,32 +2143,22 @@ export default function App() {
     }
   }
 
-  // Detección proactiva de comprobantes duplicados en tiempo real
+  // Detección proactiva de comprobantes duplicados en tiempo real (por emisor/titular y número de comprobante)
   const duplicateVoucher = useMemo(() => {
     const rawFactura = formData.facturaNro ? String(formData.facturaNro).trim().toLowerCase() : ''
     if (!rawFactura || rawFactura === '-' || rawFactura === '0' || rawFactura === '0000') return null
 
     const rawEmpresa = formData.empresaConcepto ? String(formData.empresaConcepto).trim().toLowerCase() : ''
+    if (!rawEmpresa) return null
 
-    // 1. Coincidencia exacta (Factura Nº + Titular/Empresa)
-    if (rawEmpresa) {
-      const exact = movimientos.find((m) => {
-        if (editingId && m.id === editingId) return false
-        const mFactura = m.facturaNro ? String(m.facturaNro).trim().toLowerCase() : ''
-        const mEmpresa = m.empresaConcepto ? String(m.empresaConcepto).trim().toLowerCase() : ''
-        return mFactura === rawFactura && mEmpresa === rawEmpresa
-      })
-      if (exact) return { ...exact, matchType: 'EXACT' }
-    }
-
-    // 2. Coincidencia de Nº de comprobante con otro emisor
-    const matchNumber = movimientos.find((m) => {
+    // Coincidencia exacta (Factura Nº + Titular/Empresa/Médico)
+    const exact = movimientos.find((m) => {
       if (editingId && m.id === editingId) return false
       const mFactura = m.facturaNro ? String(m.facturaNro).trim().toLowerCase() : ''
-      return mFactura === rawFactura
+      const mEmpresa = m.empresaConcepto ? String(m.empresaConcepto).trim().toLowerCase() : ''
+      return mFactura === rawFactura && mEmpresa === rawEmpresa
     })
-
-    if (matchNumber) return { ...matchNumber, matchType: 'NUMBER_ONLY' }
+    if (exact) return { ...exact, matchType: 'EXACT' }
 
     return null
   }, [formData.facturaNro, formData.empresaConcepto, movimientos, editingId])
@@ -1850,6 +2226,11 @@ export default function App() {
       computedChequeRef = formData.chequeOperacion ? `Débito - ${formData.chequeOperacion}` : 'Débito / Tarjeta'
     }
 
+    if (isCurrentPeriodoCerrado) {
+      alert(`⚠️ El período actual (${selectedMes}) se encuentra CERRADO Y BLOQUEADO.\nNo es posible registrar ni modificar comprobantes en períodos contables cerrados. Desbloquee el período desde el candado en la barra superior si requiere hacer ajustes administrativos.`)
+      return
+    }
+
     if (editingId) {
       // 1. MODO EDICIÓN / MODIFICAR
       const currentMov = movimientos.find((m) => m.id === editingId) || {}
@@ -1857,6 +2238,12 @@ export default function App() {
         ...currentMov,
         fecha: formData.fecha,
         facturaNro: formData.facturaNro,
+        tipoComprobante: formData.tipoComprobante || 'FACTURA_B',
+        netoGravado: Number(formData.netoGravado || 0),
+        alicuotaIva: Number(formData.alicuotaIva || 0),
+        ivaImporte: Number(formData.ivaImporte || 0),
+        ivaNoGravado: Number(formData.ivaNoGravado || 0),
+        percepciones: Number(formData.percepciones || 0),
         rubro: modalType === 'MEDICO' ? 'MÉDICO' : modalType === 'INGRESO' ? 'INGRESOS' : formData.rubro,
         empresaConcepto: formData.empresaConcepto || (modalType === 'INGRESO' ? 'Ingresos Varios' : ''),
         detalle: formData.detalle,
@@ -1894,6 +2281,12 @@ export default function App() {
           .update({
             fecha: updatedMov.fecha,
             factura_nro: updatedMov.facturaNro || null,
+            tipo_comprobante: updatedMov.tipoComprobante,
+            neto_gravado: updatedMov.netoGravado,
+            alicuota_iva: updatedMov.alicuotaIva,
+            iva_importe: updatedMov.ivaImporte,
+            iva_no_gravado: updatedMov.ivaNoGravado,
+            percepciones: updatedMov.percepciones,
             rubro: updatedMov.rubro,
             empresa_concepto: updatedMov.empresaConcepto,
             detalle: updatedMov.detalle || null,
@@ -1931,6 +2324,12 @@ export default function App() {
         id: 'mov-' + Date.now(),
         fecha: formData.fecha,
         facturaNro: formData.facturaNro,
+        tipoComprobante: formData.tipoComprobante || 'FACTURA_B',
+        netoGravado: Number(formData.netoGravado || 0),
+        alicuotaIva: Number(formData.alicuotaIva || 0),
+        ivaImporte: Number(formData.ivaImporte || 0),
+        ivaNoGravado: Number(formData.ivaNoGravado || 0),
+        percepciones: Number(formData.percepciones || 0),
         rubro: modalType === 'MEDICO' ? 'MÉDICO' : modalType === 'INGRESO' ? 'INGRESOS' : formData.rubro,
         empresaConcepto: formData.empresaConcepto || (modalType === 'INGRESO' ? 'Ingresos Varios' : ''),
         detalle: formData.detalle,
@@ -1970,6 +2369,12 @@ export default function App() {
             {
               fecha: newMov.fecha,
               factura_nro: newMov.facturaNro || null,
+              tipo_comprobante: newMov.tipoComprobante,
+              neto_gravado: newMov.netoGravado,
+              alicuota_iva: newMov.alicuotaIva,
+              iva_importe: newMov.ivaImporte,
+              iva_no_gravado: newMov.ivaNoGravado,
+              percepciones: newMov.percepciones,
               rubro: newMov.rubro,
               empresa_concepto: newMov.empresaConcepto,
               detalle: newMov.detalle || null,
@@ -2122,6 +2527,82 @@ export default function App() {
     )
   }
 
+  // Helper para registrar un cheque recibido desde Caja Diaria en la Cartera de Cheques / Movimientos
+  const handleRegistrarChequeDesdeCaja = async (chequeData) => {
+    const newMov = {
+      id: chequeData.id || `chq-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      fecha: chequeData.fecha || getTodayLocalDate(),
+      facturaNro: chequeData.facturaNro || (chequeData.numero ? `CHQ-${chequeData.numero}` : ''),
+      rubro: 'INGRESOS',
+      empresaConcepto: chequeData.emisor || chequeData.concepto || 'Ingreso con Cheque (Caja Diaria)',
+      detalle: chequeData.detalle || `Cheque recibido en Caja Diaria - ${chequeData.fecha}`,
+      detalleExtenso: chequeData.observaciones || '',
+      realizadoEn: 'Caja Diaria Secretaría',
+      fechaPago: null, // Activo en Cartera (no cobrado/depositado aún)
+      chequeOperacion: chequeData.chequeOperacion || `${chequeData.formato === 'ECHEQ' ? 'E-Cheq' : 'Cheque'} de Tercero en Cartera - N° ${chequeData.numero || ''} (${chequeData.banco || ''}) | Cobro: ${chequeData.fechaCobro || chequeData.fecha} | Librador: ${chequeData.emisor || ''}`,
+      mesPeriodo: selectedMes,
+      total: Number(chequeData.monto || 0),
+      ingresosS: Number(chequeData.monto || 0),
+      observaciones: chequeData.observaciones || 'Registrado desde Caja Diaria'
+    }
+
+    setMovimientos((prev) => [newMov, ...prev])
+
+    try {
+      if (supabase) {
+        await supabase.from('movimientos').insert([{
+          id: newMov.id,
+          fecha: newMov.fecha,
+          factura_nro: newMov.facturaNro,
+          rubro: newMov.rubro,
+          empresa_concepto: newMov.empresaConcepto,
+          detalle: newMov.detalle,
+          detalle_extenso: newMov.detalleExtenso,
+          realizado_en: newMov.realizadoEn,
+          fecha_pago: null,
+          cheque_operacion: newMov.chequeOperacion,
+          mes_periodo: newMov.mesPeriodo,
+          total: newMov.total,
+          ingresos_s: newMov.ingresosS,
+          observaciones: newMov.observaciones
+        }])
+      }
+    } catch (err) {
+      console.error('Error guardando cheque en Supabase:', err)
+    }
+
+    return newMov
+  }
+
+  // Helper para bajar / depositar un cheque de cartera desde Caja Diaria
+  const handleDepositarChequeDesdeCaja = async (chequeId, fechaDeposito, bancoDestino = 'Cta. Bco.') => {
+    setMovimientos((prev) =>
+      prev.map((m) => {
+        if (m.id === chequeId) {
+          return {
+            ...m,
+            fechaPago: fechaDeposito,
+            detalle: `${m.detalle || ''} [Depositado el ${fechaDeposito} en ${bancoDestino}]`.trim()
+          }
+        }
+        return m
+      })
+    )
+
+    try {
+      if (supabase) {
+        await supabase
+          .from('movimientos')
+          .update({
+            fecha_pago: fechaDeposito
+          })
+          .eq('id', chequeId)
+      }
+    } catch (err) {
+      console.error('Error actualizando depósito de cheque en Supabase:', err)
+    }
+  }
+
   return (
     <div className="flex h-screen print:h-auto print:min-h-0 print:overflow-visible print:block bg-slate-950 text-slate-100 overflow-hidden font-sans relative">
       {/* MOBILE OVERLAY */}
@@ -2223,6 +2704,24 @@ export default function App() {
 
             <button
               onClick={() => {
+                setActiveTab('cajadiaria')
+                setIsMobileSidebarOpen(false)
+              }}
+              title="Planilla de Caja Diaria"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                activeTab === 'cajadiaria'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Receipt className="w-4 h-4 text-amber-400 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Caja Diaria</span>}
+            </button>
+
+            <button
+              onClick={() => {
                 setActiveTab('cheques')
                 setIsMobileSidebarOpen(false)
               }}
@@ -2287,6 +2786,42 @@ export default function App() {
             >
               <UserCheck className="w-4 h-4 shrink-0 text-indigo-400" />
               {!isSidebarCollapsed && <span className="truncate">Honorarios Médicos</span>}
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('ivacompras')
+                setIsMobileSidebarOpen(false)
+              }}
+              title="Libro IVA Compras Digital"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                activeTab === 'ivacompras'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Libro IVA Compras</span>}
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('bancos')
+                setIsMobileSidebarOpen(false)
+              }}
+              title="Cuentas Bancarias & Conciliación"
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
+              } rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                activeTab === 'bancos'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Landmark className="w-4 h-4 text-sky-400 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Bancos & Conciliación</span>}
             </button>
 
             <button
@@ -2374,16 +2909,49 @@ export default function App() {
               <h2 className="text-sm md:text-base lg:text-lg font-semibold text-white truncate">
                 {activeTab === 'cuentacorriente' && 'Cuentas Corrientes'}
                 {activeTab === 'libro' && 'Libro Diario / Caja'}
+                {activeTab === 'cajadiaria' && 'Planilla de Caja Diaria'}
                 {activeTab === 'cheques' && 'Gestión y Cartera de Cheques'}
+                {activeTab === 'ivacompras' && 'Libro IVA Compras Digital'}
+                {activeTab === 'bancos' && 'Cuentas Bancarias & Conciliación'}
                 {activeTab === 'dashboard' && 'Dashboard y Balances'}
                 {activeTab === 'medicos' && 'Honorarios Médicos'}
                 {activeTab === 'maestros' && 'Tablas Maestras'}
               </h2>
             </div>
-            {(activeTab === 'libro' || activeTab === 'dashboard') && (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
-                {selectedMes}
-              </span>
+            {(activeTab === 'libro' || activeTab === 'dashboard' || activeTab === 'ivacompras' || activeTab === 'bancos') && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 whitespace-nowrap">
+                  {selectedMes}
+                </span>
+
+                {/* Período Cerrado / Bloqueo Toggle */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleCerrarPeriodo(selectedMes)}
+                  className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition cursor-pointer ${
+                    isCurrentPeriodoCerrado
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                  }`}
+                  title={
+                    isCurrentPeriodoCerrado
+                      ? 'Período CERRADO y bloqueado contra modificaciones. Clic para desbloquear.'
+                      : 'Período ABIERTO para cargas. Clic para cerrar y proteger período.'
+                  }
+                >
+                  {isCurrentPeriodoCerrado ? (
+                    <>
+                      <Lock className="w-3 h-3 text-rose-400" />
+                      <span>Cerrado</span>
+                    </>
+                  ) : (
+                    <>
+                      <Unlock className="w-3 h-3 text-emerald-400" />
+                      <span>Abierto</span>
+                    </>
+                  )}
+                </button>
+              </div>
             )}
           </div>
 
@@ -2415,8 +2983,8 @@ export default function App() {
                 <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                   <div className="p-3.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-blue-400" />
-                      <h3 className="text-xs font-bold text-white">Vencimientos de Cheques</h3>
+                      <AlertTriangle className="w-4 h-4 text-rose-400" />
+                      <h3 className="text-xs font-bold text-white">Cheques Vencidos</h3>
                     </div>
                     <div className="flex items-center gap-1">
                       {chequeAlerts.vencidosCount > 0 && (
@@ -2424,15 +2992,10 @@ export default function App() {
                           {chequeAlerts.vencidosCount} Vencidos
                         </span>
                       )}
-                      {chequeAlerts.porVencerCount > 0 && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                          {chequeAlerts.porVencerCount} Próximos
-                        </span>
-                      )}
                       <button
                         type="button"
                         onClick={() => setIsNotificationsOpen(false)}
-                        className="p-1 text-slate-400 hover:text-white rounded ml-1"
+                        className="p-1 text-slate-400 hover:text-white rounded ml-1 cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -2440,87 +3003,47 @@ export default function App() {
                   </div>
 
                   <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/60 custom-scrollbar p-1">
-                    {chequeAlerts.all.length === 0 ? (
+                    {chequeAlerts.criticos.length === 0 ? (
                       <div className="py-8 text-center text-slate-500 text-xs">
                         <CheckCircle2 className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-emerald-400" />
-                        No hay cheques registrados en el sistema.
+                        No hay cheques vencidos en cartera.
                       </div>
                     ) : (
-                      chequeAlerts.all.map((item) => {
-                        const isAnulado = item.status === 'ANULADO'
-                        const isCaducado = item.status === 'CADUCADO'
-                        const isDevuelto = item.status === 'DEVUELTO'
-                        const isPagado = item.status === 'PAGADO'
-                        const isVencido = item.status === 'VENCIDO'
-                        const isHoy = item.status === 'HOY'
-                        const isPorVencer = item.status === 'POR_VENCER'
-
-                        const badgeStyle = isAnulado
-                          ? 'bg-red-500/20 text-red-400 border-red-500/40 font-bold'
-                          : isCaducado
-                          ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
-                          : isDevuelto
-                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                          : isPagado
-                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-semibold'
-                          : isVencido
-                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                          : isHoy
-                          ? 'bg-red-500 text-white font-extrabold border-red-400 animate-pulse'
-                          : isPorVencer
-                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                          : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 font-semibold'
-
-                        return (
-                          <div
-                            key={item.id}
-                            onClick={() => {
-                              setIsNotificationsOpen(false)
-                              handleOpenEditModal(item.movimiento)
-                            }}
-                            className="p-2.5 hover:bg-slate-800/60 rounded-xl transition cursor-pointer space-y-1"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-xs text-white truncate">
-                                {item.entidad}
-                              </span>
-                              <span
-                                className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap ${badgeStyle}`}
-                              >
-                                {isAnulado && <Ban className="w-2.5 h-2.5 text-red-400" />}
-                                {isCaducado && <Clock className="w-2.5 h-2.5 text-orange-400" />}
-                                {isDevuelto && <RotateCcw className="w-2.5 h-2.5 text-purple-400" />}
-                                {isPagado && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />}
-                                {isVencido && <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />}
-                                {isHoy && <Zap className="w-2.5 h-2.5" />}
-                                {isPorVencer && <Clock className="w-2.5 h-2.5 text-amber-400" />}
-                                <span>{item.label}</span>
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between text-[11px] text-slate-400">
-                              <span className="truncate text-slate-300 font-mono text-[10px]">
-                                {item.formato} • {item.tipo}
-                              </span>
-                              <span className="font-mono font-bold text-white">
-                                {fmtMoney(item.importe)}
-                              </span>
-                            </div>
-
-                            <div className="text-[10px] text-slate-500 truncate">
-                              {item.chequeRef}
-                            </div>
+                      chequeAlerts.criticos.map((item) => (
+                        <div
+                          key={item.id}
+                          onClick={() => {
+                            setIsNotificationsOpen(false)
+                            handleOpenEditModal(item.movimiento)
+                          }}
+                          className="p-2.5 hover:bg-slate-800/60 rounded-xl transition cursor-pointer space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-xs text-white truncate">
+                              {item.entidad}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold border whitespace-nowrap bg-rose-500/20 text-rose-400 border-rose-500/40">
+                              <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />
+                              <span>{item.label}</span>
+                            </span>
                           </div>
-                        )
-                      })
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-400">
+                            <span className="truncate text-slate-300 font-mono text-[10px]">
+                              {item.formato} • {item.tipo}
+                            </span>
+                            <span className="font-mono font-bold text-white">
+                              {fmtMoney(item.importe)}
+                            </span>
+                          </div>
+
+                          <div className="text-[10px] text-slate-500 truncate">
+                            {item.chequeRef}
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
-
-                  {chequeAlerts.all.length > 0 && (
-                    <div className="p-2.5 bg-slate-950 text-center border-t border-slate-800 text-[11px] text-slate-400">
-                      Haz clic en cualquier cheque para ver o editar su estado de pago.
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -2556,21 +3079,19 @@ export default function App() {
 
         {/* VIEW CONTAINER */}
         <div className="flex-1 overflow-y-auto print:overflow-visible print:block print:h-auto print:p-0 print:m-0 print:space-y-0 p-3 sm:p-5 lg:p-6 space-y-4 md:space-y-6">
-          {/* BANNER DE ALERTA DE VENCIMIENTOS DE CHEQUES SI CORRESPONDE */}
-          {chequeAlerts.criticos.length > 0 && (
-            <div className="bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/40 rounded-2xl p-3 sm:p-4 shadow-lg flex flex-wrap items-center justify-between gap-3 print:hidden">
+          {/* BANNER DE ALERTA DE CHEQUES VENCIDOS SI CORRESPONDE */}
+          {chequeAlerts.vencidosCount > 0 && (
+            <div className="bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 border border-rose-500/40 rounded-2xl p-3 sm:p-4 shadow-lg flex flex-wrap items-center justify-between gap-3 print:hidden">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
                   <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                    <span>Atención: Hay cheques con vencimiento próximo o vencidos</span>
-                    {chequeAlerts.vencidosCount > 0 && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40">
-                        {chequeAlerts.vencidosCount} Vencidos
-                      </span>
-                    )}
+                    <span>Atención: Hay cheques vencidos pendientes de cobro/depósito</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                      {chequeAlerts.vencidosCount} Vencidos
+                    </span>
                   </h4>
                   <p className="text-[11px] text-slate-300">
                     {chequeAlerts.criticos.map((c) => `${c.entidad} (${c.label})`).slice(0, 2).join(' • ')}
@@ -2583,9 +3104,9 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setIsNotificationsOpen(true)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 transition cursor-pointer shadow"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition cursor-pointer shadow"
                 >
-                  Ver Todos los Cheques
+                  Ver Cheques Vencidos
                 </button>
               </div>
             </div>
@@ -2823,11 +3344,39 @@ export default function App() {
                           {selectedEntityObj.nombre.charAt(0)}
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="text-sm sm:text-base font-bold text-white truncate">{selectedEntityObj.nombre}</h3>
                             <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-medium shrink-0">
                               {selectedEntityObj.tipo}
                             </span>
+                            {maestrosCuit[selectedEntityObj.nombre] ? (
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-[10px] sm:text-xs font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 font-bold">
+                                  <CreditCard className="w-3 h-3 text-cyan-400" />
+                                  CUIT: {maestrosCuit[selectedEntityObj.nombre]}
+                                </span>
+                                <a
+                                  href={`https://www.google.com/search?q=${encodeURIComponent(selectedEntityObj.nombre + ' cuit')}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[10px] text-blue-400 hover:text-blue-300 underline font-medium"
+                                  title="Buscar en Google"
+                                >
+                                  Google
+                                </a>
+                              </div>
+                            ) : (
+                              <a
+                                href={`https://www.google.com/search?q=${encodeURIComponent(selectedEntityObj.nombre + ' cuit')}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] sm:text-xs font-medium px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition shrink-0 flex items-center gap-1"
+                                title="Buscar CUIT de esta entidad en Google"
+                              >
+                                <Search className="w-3 h-3 text-amber-400" />
+                                <span>+ Buscar CUIT en Google</span>
+                              </a>
+                            )}
                           </div>
                           <p className="text-[11px] sm:text-xs text-slate-400 truncate">
                             Extracto cronológico de cuenta corriente y comprobantes
@@ -2974,6 +3523,20 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center gap-2 ml-auto sm:ml-0">
+                        {/* BOTON EMITIR ORDEN DE PAGO FORMAL */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpBeneficiarioInicial(selectedEntityObj?.nombre || '')
+                            setIsOpModalOpen(true)
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition cursor-pointer active:scale-95"
+                          title="Emitir y formalizar Orden de Pago (OP) con retenciones y recibo"
+                        >
+                          <Receipt className="w-3.5 h-3.5 text-white" />
+                          <span>+ Emitir OP</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={handleExportCCExcel}
@@ -3331,6 +3894,18 @@ export default function App() {
                       ))}
                     </select>
                   </div>
+
+                  <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <select
+                      value={diarioSortOrder}
+                      onChange={(e) => setDiarioSortOrder(e.target.value)}
+                      className="w-full sm:w-auto bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 sm:py-2 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                    >
+                      <option value="asc">Orden: Fecha Pago (Cronológico ↑)</option>
+                      <option value="desc">Orden: Fecha Pago (Inverso ↓)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -3346,7 +3921,18 @@ export default function App() {
                         <th className="py-3 px-3">Empresa / Médico / Beneficiario</th>
                         <th className="py-3 px-3">Sede</th>
                         <th className="py-3 px-3">Detalle / Concepto</th>
-                        <th className="py-3 px-3">Fecha Pago / Ref.</th>
+                        <th
+                          className="py-3 px-3 cursor-pointer select-none hover:text-blue-400 transition"
+                          onClick={() => setDiarioSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                          title="Haz clic para alternar entre orden cronológico e inverso"
+                        >
+                          <div className="flex items-center gap-1">
+                            <span>Fecha Pago / Ref.</span>
+                            <span className="text-[11px] text-blue-400 font-bold">
+                              {diarioSortOrder === 'asc' ? '▲' : '▼'}
+                            </span>
+                          </div>
+                        </th>
                         <th className="py-3 px-3 text-right">Egresos Grales</th>
                         <th className="py-3 px-3 text-right">Honorario Bruto</th>
                         <th className="py-3 px-3 text-right">Retenciones</th>
@@ -3946,19 +4532,28 @@ export default function App() {
                       e.preventDefault()
                       handleAddItem(activeCatalogTab)
                     }}
-                    className="md:col-span-7 flex gap-2"
+                    className="md:col-span-7 flex flex-wrap sm:flex-nowrap gap-2"
                   >
                     <input
                       type="text"
                       required
-                      placeholder={`Nuevo ítem para ${catalogLabels[activeCatalogTab] || activeCatalogTab}...`}
+                      placeholder={`Nombre / Razón Social para ${catalogLabels[activeCatalogTab] || activeCatalogTab}...`}
                       value={newItemName}
                       onChange={(e) => setNewItemName(e.target.value)}
-                      className="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-medium"
+                      className="flex-1 min-w-[170px] bg-slate-950 border border-slate-800 rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-medium"
                     />
+                    {['proveedores', 'medicos', 'empleados'].includes(activeCatalogTab) && (
+                      <input
+                        type="text"
+                        placeholder="CUIT / CUIL (ej: 30-71182196-8)..."
+                        value={newItemCuit}
+                        onChange={(e) => setNewItemCuit(e.target.value)}
+                        className="w-full sm:w-48 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 sm:py-2.5 text-xs font-mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      />
+                    )}
                     <button
                       type="submit"
-                      className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition cursor-pointer shrink-0"
+                      className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition cursor-pointer shrink-0"
                     >
                       <PlusCircle className="w-4 h-4" />
                       <span>Agregar</span>
@@ -3969,51 +4564,96 @@ export default function App() {
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 sm:top-3 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder={`Filtrar en ${catalogLabels[activeCatalogTab] || activeCatalogTab}...`}
+                      placeholder="Buscar en TODAS las tablas maestras (nombre o CUIT)..."
                       value={catalogSearch}
                       onChange={(e) => setCatalogSearch(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 sm:py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-8 py-2 sm:py-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
                     />
+                    {catalogSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCatalogSearch('')}
+                        className="absolute right-3 top-2.5 sm:top-3 text-slate-500 hover:text-white"
+                        title="Limpiar búsqueda"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Items List Table with Edit and Delete */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-                <div className="p-3.5 sm:p-4 bg-slate-950/60 border-b border-slate-800 flex justify-between items-center text-xs">
-                  <span className="font-semibold text-slate-300 uppercase tracking-wider">
-                    Listado de {catalogLabels[activeCatalogTab] || activeCatalogTab} (Orden Alfabético)
-                  </span>
+                <div className="p-3.5 sm:p-4 bg-slate-950/60 border-b border-slate-800 flex flex-wrap justify-between items-center gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-300 uppercase tracking-wider">
+                      {catalogSearch.trim() !== ''
+                        ? `Búsqueda Global en Todas las Tablas ("${catalogSearch}")`
+                        : `Listado de ${catalogLabels[activeCatalogTab] || activeCatalogTab} (Orden Alfabético)`}
+                    </span>
+                    {catalogSearch.trim() !== '' && (
+                      <button
+                        type="button"
+                        onClick={() => setCatalogSearch('')}
+                        className="text-[11px] text-blue-400 hover:underline cursor-pointer font-medium"
+                      >
+                        (Ver tabla actual)
+                      </button>
+                    )}
+                  </div>
                   <span className="text-slate-400 font-mono">
-                    Total: {maestros[activeCatalogTab]?.length || 0} registros
+                    {catalogSearch.trim() !== ''
+                      ? `${displayedCatalogItems.length} coincidencias encontradas`
+                      : `Total: ${maestros[activeCatalogTab]?.length || 0} registros`}
                   </span>
                 </div>
 
-                <div className="divide-y divide-slate-800/60 max-h-[500px] overflow-y-auto">
-                  {sortAlphabetical(maestros[activeCatalogTab] || [])
-                    .filter(
-                      (item) =>
-                        catalogSearch === '' || item.toLowerCase().includes(catalogSearch.toLowerCase())
-                    )
-                    .map((item, index) => {
+                <div className="divide-y divide-slate-800/60 max-h-[520px] overflow-y-auto">
+                  {displayedCatalogItems.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 text-xs">
+                      {catalogSearch.trim() !== ''
+                        ? `No se encontraron coincidencias en ninguna tabla maestra para "${catalogSearch}".`
+                        : 'No hay registros cargados en esta tabla.'}
+                    </div>
+                  ) : (
+                    displayedCatalogItems.map(({ catalogKey, item, index, isGlobal }) => {
                       const isEditing =
                         editingItem &&
-                        editingItem.catalogKey === activeCatalogTab &&
+                        editingItem.catalogKey === catalogKey &&
                         editingItem.oldVal === item
+                      const itemCuit = maestrosCuit[item]
+                      const isCuitEligible = ['proveedores', 'medicos', 'empleados'].includes(catalogKey)
+                      const catLabel = catalogLabels[catalogKey] || catalogKey.replace(/_/g, ' ')
 
                       return (
                         <div
-                          key={item + index}
+                          key={`${catalogKey}-${item}-${index}`}
                           className="px-3.5 sm:px-5 py-3 flex items-center justify-between hover:bg-slate-800/40 transition group"
                         >
-                          <div className="flex-1 flex items-center gap-2 sm:gap-3 pr-2 sm:pr-4 min-w-0">
+                          <div className="flex-1 flex items-center gap-2 sm:gap-3 pr-2 sm:pr-4 min-w-0 flex-wrap">
                             <span className="text-xs font-mono text-slate-500 w-6 sm:w-7 shrink-0">#{index + 1}</span>
 
+                            {isGlobal && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveCatalogTab(catalogKey)
+                                  setCatalogSearch('')
+                                }}
+                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600/15 text-blue-300 border border-blue-500/30 hover:bg-blue-600 hover:text-white transition cursor-pointer shrink-0"
+                                title={`Filtrar solo por la tabla ${catLabel}`}
+                              >
+                                {catLabel}
+                              </button>
+                            )}
+
                             {isEditing ? (
-                              <div className="flex items-center gap-2 flex-1 max-w-md">
+                              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 flex-1 max-w-xl">
                                 <input
                                   type="text"
                                   autoFocus
+                                  placeholder="Nombre o Razón Social..."
                                   value={editingItem.newVal}
                                   onChange={(e) =>
                                     setEditingItem({ ...editingItem, newVal: e.target.value })
@@ -4022,35 +4662,71 @@ export default function App() {
                                     if (e.key === 'Enter') handleSaveEdit()
                                     if (e.key === 'Escape') setEditingItem(null)
                                   }}
-                                  className="w-full bg-slate-950 border border-blue-500 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
+                                  className="flex-1 min-w-[150px] bg-slate-950 border border-blue-500 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none"
                                 />
-                                <button
-                                  type="button"
-                                  onClick={handleSaveEdit}
-                                  className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition cursor-pointer"
-                                  title="Guardar cambios"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingItem(null)}
-                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition cursor-pointer"
-                                  title="Cancelar"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
+                                {isCuitEligible && (
+                                  <input
+                                    type="text"
+                                    placeholder="CUIT / CUIL..."
+                                    value={editingItem.newCuit || ''}
+                                    onChange={(e) =>
+                                      setEditingItem({ ...editingItem, newCuit: e.target.value })
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveEdit()
+                                      if (e.key === 'Escape') setEditingItem(null)
+                                    }}
+                                    className="w-36 bg-slate-950 border border-blue-500/80 rounded-lg px-2.5 py-1.5 text-xs font-mono text-blue-200 focus:outline-none"
+                                  />
+                                )}
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={handleSaveEdit}
+                                    className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition cursor-pointer"
+                                    title="Guardar cambios"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingItem(null)}
+                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 transition cursor-pointer"
+                                    title="Cancelar"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             ) : (
-                              <span className="text-xs font-semibold text-slate-200 truncate">{item}</span>
+                              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 flex-wrap">
+                                <span className="text-xs font-semibold text-slate-200 truncate">{item}</span>
+                                {isCuitEligible && (
+                                  itemCuit ? (
+                                    <span className="inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 whitespace-nowrap">
+                                      <CreditCard className="w-3 h-3 text-blue-400" />
+                                      CUIT: {itemCuit}
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEdit(catalogKey, item)}
+                                      className="text-[10px] text-slate-500 hover:text-blue-400 italic cursor-pointer transition flex items-center gap-0.5"
+                                      title="Agregar CUIT/CUIL a este registro"
+                                    >
+                                      + CUIT/CUIL
+                                    </button>
+                                  )
+                                )}
+                              </div>
                             )}
                           </div>
 
                           {!isEditing && (
-                            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-2">
                               <button
                                 type="button"
-                                onClick={() => handleStartEdit(activeCatalogTab, item)}
+                                onClick={() => handleStartEdit(catalogKey, item)}
                                 className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-blue-600/20 text-slate-300 hover:text-blue-400 border border-slate-700 hover:border-blue-500/40 transition cursor-pointer"
                               >
                                 <Edit2 className="w-3 h-3" />
@@ -4059,7 +4735,7 @@ export default function App() {
 
                               <button
                                 type="button"
-                                onClick={() => handleDeleteItem(activeCatalogTab, item)}
+                                onClick={() => handleDeleteItem(catalogKey, item)}
                                 className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 transition cursor-pointer"
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -4069,7 +4745,8 @@ export default function App() {
                           )}
                         </div>
                       )
-                    })}
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -4393,8 +5070,66 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {/* TAB CAJA DIARIA */}
+          {activeTab === 'cajadiaria' && (
+            <CajaDiaria
+              currentUser={currentUser}
+              movimientosGlobales={movimientos}
+              maestros={maestros}
+              chequesEnCartera={chequeAlerts.all}
+              onRegistrarCheque={handleRegistrarChequeDesdeCaja}
+              onDepositarCheque={handleDepositarChequeDesdeCaja}
+              bancosList={BANCOS_ARGENTINA}
+              supabase={supabase}
+              fmtMoney={fmtMoney}
+            />
+          )}
+
+          {/* TAB 7: LIBRO IVA COMPRAS DIGITAL */}
+          {activeTab === 'ivacompras' && (
+            <LibroIvaCompras
+              movimientos={movimientos}
+              selectedMes={selectedMes}
+              meses={meses}
+              onSelectMes={setSelectedMes}
+              fmtMoney={fmtMoney}
+            />
+          )}
+
+          {/* TAB 8: CUENTAS BANCARIAS & CONCILIACIÓN */}
+          {activeTab === 'bancos' && (
+            <ModuloBancos
+              movimientos={movimientos}
+              setMovimientos={setMovimientos}
+              selectedMes={selectedMes}
+              meses={meses}
+              onSelectMes={setSelectedMes}
+              bancosList={BANCOS_ARGENTINA}
+              supabase={supabase}
+              fmtMoney={fmtMoney}
+              isCurrentPeriodoCerrado={isCurrentPeriodoCerrado}
+            />
+          )}
         </div>
       </main>
+
+      {/* MODAL EMISIÓN DE ORDEN DE PAGO (OP) FORMAL */}
+      <OrdenesPagoModal
+        isOpen={isOpModalOpen}
+        onClose={() => {
+          setIsOpModalOpen(false)
+          setOpBeneficiarioInicial('')
+        }}
+        movimientos={movimientos}
+        entidadesCC={entidadesCC}
+        maestrosCuit={maestrosCuit}
+        bancosList={BANCOS_ARGENTINA}
+        onEmitirOP={handleEmitirOP}
+        beneficiarioInicial={opBeneficiarioInicial}
+        isCurrentPeriodoCerrado={isCurrentPeriodoCerrado}
+        fmtMoney={fmtMoney}
+      />
 
       {/* MODAL DE CARGA RÁPIDA */}
       {isModalOpen && (
@@ -4456,46 +5191,382 @@ export default function App() {
 
             {/* Modal Form */}
             <form onSubmit={handleSaveMovement} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha Emisión</label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.fecha}
-                    onChange={(e) => handleInputChange('fecha', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Comprobante / Factura Nº</label>
-                  <input
-                    type="text"
-                    placeholder="00001-00000123"
-                    value={formData.facturaNro}
-                    onChange={(e) => handleInputChange('facturaNro', e.target.value)}
-                    className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none ${
-                      duplicateVoucher
-                        ? duplicateVoucher.matchType === 'EXACT'
+              {/* Dynamic Entity and Invoice Input Fields Ordered so Entity is chosen FIRST */}
+              {modalType === 'MEDICO' ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha Emisión</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.fecha}
+                        onChange={(e) => handleInputChange('fecha', e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="relative">
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        1. Médico / Profesional <span className="text-rose-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsDropdownOpen(!isDropdownOpen)
+                            setEntitySearchFilter('')
+                          }}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className={formData.empresaConcepto ? 'text-white font-semibold truncate' : 'text-slate-500 truncate'}>
+                              {formData.empresaConcepto || '-- Seleccione o busque un médico --'}
+                            </span>
+                            {formData.empresaConcepto && maestrosCuit[formData.empresaConcepto] && (
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 text-cyan-300 border border-cyan-500/30 shrink-0">
+                                CUIT: {maestrosCuit[formData.empresaConcepto]}
+                              </span>
+                            )}
+                          </div>
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+                        </button>
+
+                        {isDropdownOpen && (
+                          <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                            <div className="p-2 border-b border-slate-800 bg-slate-950">
+                              <div className="relative">
+                                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  placeholder="Filtrar médico por nombre o CUIT..."
+                                  value={entitySearchFilter}
+                                  onChange={(e) => setEntitySearchFilter(e.target.value)}
+                                  className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="max-h-48 overflow-y-auto p-1 divide-y divide-slate-800/40">
+                              {sortAlphabetical(maestros.medicos || [])
+                                .filter((m) => {
+                                  if (!entitySearchFilter) return true
+                                  const term = entitySearchFilter.toLowerCase()
+                                  const cuit = (maestrosCuit[m] || '').toLowerCase()
+                                  return m.toLowerCase().includes(term) || cuit.includes(term)
+                                })
+                                .map((m) => (
+                                  <div
+                                    key={m}
+                                    onClick={() => {
+                                      handleInputChange('empresaConcepto', m)
+                                      setIsDropdownOpen(false)
+                                    }}
+                                    className={`px-3 py-2 text-xs rounded-lg cursor-pointer transition flex items-center justify-between gap-2 ${
+                                      formData.empresaConcepto === m
+                                        ? 'bg-blue-600 text-white font-bold'
+                                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="truncate">{m}</span>
+                                      {maestrosCuit[m] && (
+                                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-950/80 text-cyan-300 border border-cyan-500/30 shrink-0">
+                                          {maestrosCuit[m]}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {formData.empresaConcepto === m && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-1" />}
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* CUIT / CUIL display and fast-edit for selected Médico */}
+                      {formData.empresaConcepto && (
+                        <div className="mt-2 p-2 rounded-lg bg-slate-950/90 border border-slate-800 flex items-center justify-between gap-2 flex-wrap text-xs animate-in fade-in">
+                          <div className="flex items-center gap-1.5 flex-1 min-w-[190px]">
+                            <span className="text-[11px] font-bold text-slate-400 shrink-0">CUIT / CUIL:</span>
+                            <input
+                              type="text"
+                              placeholder="Ej: 20-17467749-3 (Escribe para guardar CUIT)"
+                              value={maestrosCuit[formData.empresaConcepto] || ''}
+                              onChange={(e) => handleUpdateEntityCuit(formData.empresaConcepto, e.target.value, 'medicos')}
+                              className="bg-slate-900 border border-slate-700/80 rounded px-2 py-0.5 text-xs font-mono font-bold text-cyan-300 placeholder-slate-500 focus:outline-none focus:border-cyan-400 flex-1 min-w-[130px]"
+                            />
+                          </div>
+                          <a
+                            href={`https://www.google.com/search?q=${encodeURIComponent(formData.empresaConcepto + ' cuit')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-blue-400 hover:text-blue-300 underline font-medium flex items-center gap-1 shrink-0"
+                            title="Buscar CUIT de este médico en Google"
+                          >
+                            <Search className="w-3 h-3" />
+                            Buscar en Google
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">
+                      2. Comprobante / Factura Nº
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="00001-00000123"
+                      value={formData.facturaNro}
+                      onChange={(e) => handleInputChange('facturaNro', e.target.value)}
+                      className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none ${
+                        duplicateVoucher
                           ? 'border-rose-500 bg-rose-950/30 text-rose-200 focus:border-rose-400 font-semibold'
-                          : 'border-amber-500/80 bg-amber-950/20 text-amber-200 focus:border-amber-400'
-                        : 'border-slate-800 focus:border-blue-500'
-                    }`}
-                  />
-                  {duplicateVoucher && (
-                    <span
-                      className={`text-[11px] font-semibold flex items-center gap-1 mt-1 ${
-                        duplicateVoucher.matchType === 'EXACT' ? 'text-rose-400' : 'text-amber-400'
+                          : 'border-slate-800 focus:border-blue-500'
                       }`}
-                    >
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      {duplicateVoucher.matchType === 'EXACT'
-                        ? `¡Factura ya cargada para ${duplicateVoucher.empresaConcepto}!`
-                        : `Existe comprobante Nº ${duplicateVoucher.facturaNro} cargado para ${duplicateVoucher.empresaConcepto}`}
-                    </span>
-                  )}
-                </div>
-              </div>
+                    />
+                    {duplicateVoucher && (
+                      <span className="text-[11px] font-semibold flex items-center gap-1 mt-1 text-rose-400">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        ¡Factura ya cargada para {duplicateVoucher.empresaConcepto}!
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : modalType === 'EGRESO' ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha Emisión</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.fecha}
+                        onChange={(e) => handleInputChange('fecha', e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">Rubro</label>
+                      <select
+                        value={formData.rubro}
+                        onChange={(e) => {
+                          handleInputChange('rubro', e.target.value)
+                          handleInputChange('empresaConcepto', '')
+                          setIsDropdownOpen(false)
+                        }}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                      >
+                        <option value="PROVEEDOR">PROVEEDOR</option>
+                        <option value="EMPLEADOS">EMPLEADOS</option>
+                        <option value="IMPUESTO">IMPUESTO</option>
+                        <option value="SEGUROS">SEGUROS</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="relative">
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        1.{' '}
+                        {formData.rubro === 'EMPLEADOS'
+                          ? 'Empleado / Personal'
+                          : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
+                          ? 'Organismo / Entidad'
+                          : 'Proveedor / Empresa'}{' '}
+                        <span className="text-rose-400">*</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsDropdownOpen(!isDropdownOpen)
+                          setEntitySearchFilter('')
+                        }}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className={formData.empresaConcepto ? 'text-white font-semibold truncate' : 'text-slate-500 truncate'}>
+                            {formData.empresaConcepto ||
+                              `-- Buscar ${
+                                formData.rubro === 'EMPLEADOS'
+                                  ? 'empleado'
+                                  : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
+                                  ? 'organismo'
+                                  : 'proveedor'
+                              } --`}
+                          </span>
+                          {formData.empresaConcepto && maestrosCuit[formData.empresaConcepto] && (
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 text-cyan-300 border border-cyan-500/30 shrink-0">
+                              CUIT: {maestrosCuit[formData.empresaConcepto]}
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
+                      </button>
+
+                      {isDropdownOpen && (
+                        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                          <div className="p-2 border-b border-slate-800 bg-slate-950">
+                            <div className="relative">
+                              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                              <input
+                                type="text"
+                                autoFocus
+                                placeholder="Escribe para filtrar opciones o CUIT..."
+                                value={entitySearchFilter}
+                                onChange={(e) => setEntitySearchFilter(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="max-h-48 overflow-y-auto p-1 divide-y divide-slate-800/40">
+                            {sortAlphabetical(
+                              formData.rubro === 'EMPLEADOS'
+                                ? maestros.empleados || []
+                                : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
+                                ? maestros.impuestos || []
+                                : maestros.proveedores || []
+                            )
+                              .filter((ent) => {
+                                if (!entitySearchFilter) return true
+                                const term = entitySearchFilter.toLowerCase()
+                                const cuit = (maestrosCuit[ent] || '').toLowerCase()
+                                return ent.toLowerCase().includes(term) || cuit.includes(term)
+                              })
+                              .map((ent) => (
+                                <div
+                                  key={ent}
+                                  onClick={() => {
+                                    handleInputChange('empresaConcepto', ent)
+                                    setIsDropdownOpen(false)
+                                  }}
+                                  className={`px-3 py-2 text-xs rounded-lg cursor-pointer transition flex items-center justify-between gap-2 ${
+                                    formData.empresaConcepto === ent
+                                      ? 'bg-blue-600 text-white font-bold'
+                                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="truncate">{ent}</span>
+                                    {maestrosCuit[ent] && (
+                                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-950/80 text-cyan-300 border border-cyan-500/30 shrink-0">
+                                        {maestrosCuit[ent]}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {formData.empresaConcepto === ent && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-1" />}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CUIT / CUIL display and fast-edit for selected Proveedor / Empleado / Organismo */}
+                      {formData.empresaConcepto && (
+                        <div className="mt-2 p-2 rounded-lg bg-slate-950/90 border border-slate-800 flex items-center justify-between gap-2 flex-wrap text-xs animate-in fade-in">
+                          <div className="flex items-center gap-1.5 flex-1 min-w-[190px]">
+                            <span className="text-[11px] font-bold text-slate-400 shrink-0">CUIT / CUIL:</span>
+                            <input
+                              type="text"
+                              placeholder="Ej: 30-71182196-8 (Escribe para guardar CUIT)"
+                              value={maestrosCuit[formData.empresaConcepto] || ''}
+                              onChange={(e) =>
+                                handleUpdateEntityCuit(
+                                  formData.empresaConcepto,
+                                  e.target.value,
+                                  formData.rubro === 'EMPLEADOS' ? 'empleados' : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS' ? 'impuestos' : 'proveedores'
+                                )
+                              }
+                              className="bg-slate-900 border border-slate-700/80 rounded px-2 py-0.5 text-xs font-mono font-bold text-cyan-300 placeholder-slate-500 focus:outline-none focus:border-cyan-400 flex-1 min-w-[130px]"
+                            />
+                          </div>
+                          <a
+                            href={`https://www.google.com/search?q=${encodeURIComponent(formData.empresaConcepto + ' cuit')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-blue-400 hover:text-blue-300 underline font-medium flex items-center gap-1 shrink-0"
+                            title="Buscar CUIT de esta entidad en Google"
+                          >
+                            <Search className="w-3 h-3" />
+                            Buscar en Google
+                          </a>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        2. Comprobante / Factura Nº
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="00001-00000123"
+                        value={formData.facturaNro}
+                        onChange={(e) => handleInputChange('facturaNro', e.target.value)}
+                        className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none ${
+                          duplicateVoucher
+                            ? 'border-rose-500 bg-rose-950/30 text-rose-200 focus:border-rose-400 font-semibold'
+                            : 'border-slate-800 focus:border-blue-500'
+                        }`}
+                      />
+                      {duplicateVoucher && (
+                        <span className="text-[11px] font-semibold flex items-center gap-1 mt-1 text-rose-400">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          ¡Factura ya cargada para {duplicateVoucher.empresaConcepto}!
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha Emisión</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.fecha}
+                        onChange={(e) => handleInputChange('fecha', e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">
+                        Concepto Principal de Ingreso <span className="text-rose-400">*</span>
+                      </label>
+                      <select
+                        required
+                        value={formData.empresaConcepto}
+                        onChange={(e) => handleInputChange('empresaConcepto', e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
+                      >
+                        <option value="">-- Seleccione concepto de ingreso --</option>
+                        {sortAlphabetical(maestros.ingresosTipos || []).map((it) => (
+                          <option key={it} value={it}>
+                            {it}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 block mb-1">Comprobante / Recibo Nº</label>
+                    <input
+                      type="text"
+                      placeholder="00001-00000123"
+                      value={formData.facturaNro}
+                      onChange={(e) => handleInputChange('facturaNro', e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* AVISO PROACTIVO DE COMPROBANTE EXISTENTE PARA NO CARGAR DE GUSTO */}
               {duplicateVoucher && (
@@ -4564,193 +5635,6 @@ export default function App() {
                       Abrir Comprobante Existente
                     </button>
                   </div>
-                </div>
-              )}
-
-              {/* Dynamic Entity Select according to type with SEARCHABLE DROPDOWN */}
-              {modalType === 'MEDICO' ? (
-                <div className="relative">
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">
-                    Médico / Profesional <span className="text-rose-400">*</span>
-                  </label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDropdownOpen(!isDropdownOpen)
-                        setEntitySearchFilter('')
-                      }}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
-                    >
-                      <span className={formData.empresaConcepto ? 'text-white font-semibold' : 'text-slate-500'}>
-                        {formData.empresaConcepto || '-- Seleccione o busque un médico --'}
-                      </span>
-                      <ChevronDown className="w-4 h-4 text-slate-400" />
-                    </button>
-
-                    {isDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                        <div className="p-2 border-b border-slate-800 bg-slate-950">
-                          <div className="relative">
-                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                            <input
-                              type="text"
-                              autoFocus
-                              placeholder="Filtrar médico por nombre..."
-                              value={entitySearchFilter}
-                              onChange={(e) => setEntitySearchFilter(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="max-h-48 overflow-y-auto p-1 divide-y divide-slate-800/40">
-                          {sortAlphabetical(maestros.medicos || [])
-                            .filter((m) =>
-                              entitySearchFilter === '' ||
-                              m.toLowerCase().includes(entitySearchFilter.toLowerCase())
-                            )
-                            .map((m) => (
-                              <div
-                                key={m}
-                                onClick={() => {
-                                  handleInputChange('empresaConcepto', m)
-                                  setIsDropdownOpen(false)
-                                }}
-                                className={`px-3 py-2 text-xs rounded-lg cursor-pointer transition flex items-center justify-between ${
-                                  formData.empresaConcepto === m
-                                    ? 'bg-blue-600 text-white font-bold'
-                                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                                }`}
-                              >
-                                <span>{m}</span>
-                                {formData.empresaConcepto === m && <Check className="w-3.5 h-3.5 text-white" />}
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : modalType === 'EGRESO' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-300 block mb-1">Rubro</label>
-                    <select
-                      value={formData.rubro}
-                      onChange={(e) => {
-                        handleInputChange('rubro', e.target.value)
-                        handleInputChange('empresaConcepto', '')
-                        setIsDropdownOpen(false)
-                      }}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
-                    >
-                      <option value="PROVEEDOR">PROVEEDOR</option>
-                      <option value="EMPLEADOS">EMPLEADOS</option>
-                      <option value="IMPUESTO">IMPUESTO</option>
-                      <option value="SEGUROS">SEGUROS</option>
-                    </select>
-                  </div>
-
-                  <div className="relative">
-                    <label className="text-xs font-semibold text-slate-300 block mb-1">
-                      {formData.rubro === 'EMPLEADOS'
-                        ? 'Empleado / Personal'
-                        : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
-                        ? 'Organismo / Entidad'
-                        : 'Proveedor / Empresa'}{' '}
-                      <span className="text-rose-400">*</span>
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDropdownOpen(!isDropdownOpen)
-                        setEntitySearchFilter('')
-                      }}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-left flex items-center justify-between text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
-                    >
-                      <span className={formData.empresaConcepto ? 'text-white font-semibold truncate' : 'text-slate-500 truncate'}>
-                        {formData.empresaConcepto ||
-                          `-- Buscar ${
-                            formData.rubro === 'EMPLEADOS'
-                              ? 'empleado'
-                              : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
-                              ? 'organismo'
-                              : 'proveedor'
-                          } --`}
-                      </span>
-                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-1" />
-                    </button>
-
-                    {isDropdownOpen && (
-                      <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                        <div className="p-2 border-b border-slate-800 bg-slate-950">
-                          <div className="relative">
-                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                            <input
-                              type="text"
-                              autoFocus
-                              placeholder="Escribe para filtrar opciones..."
-                              value={entitySearchFilter}
-                              onChange={(e) => setEntitySearchFilter(e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="max-h-48 overflow-y-auto p-1 divide-y divide-slate-800/40">
-                          {sortAlphabetical(
-                            formData.rubro === 'EMPLEADOS'
-                              ? maestros.empleados || []
-                              : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
-                              ? maestros.impuestos || []
-                              : maestros.proveedores || []
-                          )
-                            .filter((ent) =>
-                              entitySearchFilter === '' ||
-                              ent.toLowerCase().includes(entitySearchFilter.toLowerCase())
-                            )
-                            .map((ent) => (
-                              <div
-                                key={ent}
-                                onClick={() => {
-                                  handleInputChange('empresaConcepto', ent)
-                                  setIsDropdownOpen(false)
-                                }}
-                                className={`px-3 py-2 text-xs rounded-lg cursor-pointer transition flex items-center justify-between ${
-                                  formData.empresaConcepto === ent
-                                    ? 'bg-blue-600 text-white font-bold'
-                                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                                }`}
-                              >
-                                <span className="truncate">{ent}</span>
-                                {formData.empresaConcepto === ent && <Check className="w-3.5 h-3.5 text-white shrink-0 ml-2" />}
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">
-                    Concepto Principal de Ingreso <span className="text-rose-400">*</span>
-                  </label>
-                  <select
-                    required
-                    value={formData.empresaConcepto}
-                    onChange={(e) => handleInputChange('empresaConcepto', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
-                  >
-                    <option value="">-- Seleccione concepto de ingreso --</option>
-                    {sortAlphabetical(maestros.ingresosTipos || []).map((it) => (
-                      <option key={it} value={it}>
-                        {it}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               )}
 
@@ -4826,17 +5710,144 @@ export default function App() {
 
               {/* Importes según el tipo */}
               {modalType === 'EGRESO' && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">Importe Pagado / Factura ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="0.00"
-                    value={formData.pagosS}
-                    onChange={(e) => handleInputChange('pagosS', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 font-mono focus:outline-none focus:border-blue-500 text-lg font-bold"
-                  />
+                <div className="bg-slate-950 p-3.5 sm:p-4 rounded-xl border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="text-xs font-bold text-slate-200">
+                      Desglose Fiscal & Comprobante (Libro IVA Compras)
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Total: <strong className="text-emerald-400 font-bold">{fmtMoney(formData.pagosS || 0)}</strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                        Tipo de Comprobante
+                      </label>
+                      <select
+                        value={formData.tipoComprobante || 'FACTURA_B'}
+                        onChange={(e) => handleInputChange('tipoComprobante', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-medium"
+                      >
+                        <option value="FACTURA_A">Factura A (Discrimina IVA)</option>
+                        <option value="FACTURA_B">Factura B (Consumidor Final / Exento)</option>
+                        <option value="FACTURA_C">Factura C (Monotributo)</option>
+                        <option value="FACTURA_M">Factura M</option>
+                        <option value="RECIBO_X">Recibo X / Comprobante Prov.</option>
+                        <option value="NOTA_CREDITO_A">Nota de Crédito A</option>
+                        <option value="NOTA_CREDITO_B">Nota de Crédito B</option>
+                        <option value="NOTA_DEBITO_A">Nota de Débito A</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-300 block mb-1">
+                        Total Comprobante ($) <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="0.00"
+                        value={formData.pagosS}
+                        onChange={(e) => handleInputChange('pagosS', e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-sm text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Detalle IVA si es Factura A / M o tiene discriminación */}
+                  {(formData.tipoComprobante === 'FACTURA_A' || formData.tipoComprobante === 'FACTURA_M' || formData.tipoComprobante === 'NOTA_CREDITO_A' || formData.tipoComprobante === 'NOTA_DEBITO_A') ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 animate-in fade-in">
+                      <div>
+                        <label className="text-[10px] font-medium text-slate-400 block mb-0.5">
+                          Neto Gravado ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formData.netoGravado}
+                          onChange={(e) => handleInputChange('netoGravado', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-medium text-slate-400 block mb-0.5">
+                          Alícuota IVA
+                        </label>
+                        <select
+                          value={formData.alicuotaIva}
+                          onChange={(e) => handleInputChange('alicuotaIva', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="21">21.0%</option>
+                          <option value="10.5">10.5%</option>
+                          <option value="27">27.0%</option>
+                          <option value="0">0.0%</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-medium text-slate-400 block mb-0.5">
+                          IVA Crédito ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formData.ivaImporte}
+                          onChange={(e) => handleInputChange('ivaImporte', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-medium text-slate-400 block mb-0.5">
+                          Percepciones / Otros ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formData.percepciones}
+                          onChange={(e) => handleInputChange('percepciones', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-cyan-300 font-mono focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <label className="text-[10px] font-medium text-slate-400 block mb-0.5">
+                          Subtotal / No Gravado ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formData.ivaNoGravado}
+                          onChange={(e) => handleInputChange('ivaNoGravado', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-medium text-slate-400 block mb-0.5">
+                          Percepciones IIBB / Otros ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={formData.percepciones}
+                          onChange={(e) => handleInputChange('percepciones', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-cyan-300 font-mono focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
