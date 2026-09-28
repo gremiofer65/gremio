@@ -80,7 +80,7 @@ export const ORDEN_CATEGORIAS = [
 /**
  * Normaliza textos para comparación exacta
  */
-function normText(str = '') {
+export function normText(str = '') {
   return (str || '')
     .toLowerCase()
     .normalize('NFD')
@@ -99,6 +99,82 @@ export function clasificarMovimientoBanco(detalle = '') {
     }
   }
   return 'NO CATEGORIZADAS'
+}
+
+/**
+ * Recalcula resúmenes y agrupaciones a partir de las transacciones (usado al re-categorizar)
+ */
+export function recalcularAnalisisBanco(analisisOriginal, transaccionesActualizadas) {
+  if (!analisisOriginal || !transaccionesActualizadas) return analisisOriginal
+
+  const transactions = transaccionesActualizadas
+
+  // Totales por Detalle
+  const totalesPorDetalle = {}
+  for (const t of transactions) {
+    let det = t.DETALLE || 'Sin detalle'
+    if (det.toLowerCase().includes('debin')) det = 'DEBIN'
+
+    if (!totalesPorDetalle[det]) {
+      totalesPorDetalle[det] = { detalle: det, debitos: 0, creditos: 0, cantidad: 0 }
+    }
+    totalesPorDetalle[det].debitos += Number(t.DEBITOS || 0)
+    totalesPorDetalle[det].creditos += Number(t.CREDITOS || 0)
+    totalesPorDetalle[det].cantidad += 1
+  }
+  const listaTotalesDetalle = Object.values(totalesPorDetalle).sort((a, b) => b.cantidad - a.cantidad)
+
+  // Resumen por Categoría
+  const resumenCategorias = {}
+  for (const cat of ORDEN_CATEGORIAS) {
+    resumenCategorias[cat] = { categoria: cat, debitos: 0, creditos: 0, cantidad: 0 }
+  }
+  let totalNoCategorizadas = 0
+  let noCategorizadasDebitos = 0
+  let noCategorizadasCreditos = 0
+
+  for (const t of transactions) {
+    const cat = t.CATEGORIA
+    if (resumenCategorias[cat]) {
+      resumenCategorias[cat].debitos += Number(t.DEBITOS || 0)
+      resumenCategorias[cat].creditos += Number(t.CREDITOS || 0)
+      resumenCategorias[cat].cantidad += 1
+    } else {
+      totalNoCategorizadas += 1
+      noCategorizadasDebitos += Number(t.DEBITOS || 0)
+      noCategorizadasCreditos += Number(t.CREDITOS || 0)
+    }
+  }
+
+  // Detalle por Categoría
+  const detallePorCategoria = {}
+  for (const cat of [...ORDEN_CATEGORIAS, 'NO CATEGORIZADAS']) {
+    detallePorCategoria[cat] = {}
+  }
+  for (const t of transactions) {
+    const cat = t.CATEGORIA || 'NO CATEGORIZADAS'
+    const det = t.DETALLE || ''
+    if (!detallePorCategoria[cat]) detallePorCategoria[cat] = {}
+    if (!detallePorCategoria[cat][det]) {
+      detallePorCategoria[cat][det] = { categoria: cat, detalle: det, debitos: 0, creditos: 0, cantidad: 0 }
+    }
+    detallePorCategoria[cat][det].debitos += Number(t.DEBITOS || 0)
+    detallePorCategoria[cat][det].creditos += Number(t.CREDITOS || 0)
+    detallePorCategoria[cat][det].cantidad += 1
+  }
+
+  return {
+    ...analisisOriginal,
+    transactions,
+    totalDebitos: transactions.reduce((acc, t) => acc + Number(t.DEBITOS || 0), 0),
+    totalCreditos: transactions.reduce((acc, t) => acc + Number(t.CREDITOS || 0), 0),
+    listaTotalesDetalle,
+    resumenCategorias: ORDEN_CATEGORIAS.map((cat) => resumenCategorias[cat]),
+    detallePorCategoria,
+    totalNoCategorizadas,
+    noCategorizadasDebitos,
+    noCategorizadasCreditos
+  }
 }
 
 /**
@@ -270,52 +346,7 @@ export async function parsePdfExtractoBanco(file) {
     }
   }
 
-  // Totales por Detalle
-  const totalesPorDetalle = {}
-  for (const t of transactions) {
-    let det = t.DETALLE || 'Sin detalle'
-    if (det.toLowerCase().includes('debin')) det = 'DEBIN'
-
-    if (!totalesPorDetalle[det]) {
-      totalesPorDetalle[det] = { detalle: det, debitos: 0, creditos: 0, cantidad: 0 }
-    }
-    totalesPorDetalle[det].debitos += t.DEBITOS
-    totalesPorDetalle[det].creditos += t.CREDITOS
-    totalesPorDetalle[det].cantidad += 1
-  }
-  const listaTotalesDetalle = Object.values(totalesPorDetalle).sort((a, b) => b.cantidad - a.cantidad)
-
-  // Resumen por Categoría
-  const resumenCategorias = {}
-  for (const cat of ORDEN_CATEGORIAS) {
-    resumenCategorias[cat] = { categoria: cat, debitos: 0, creditos: 0, cantidad: 0 }
-  }
-  for (const t of transactions) {
-    const cat = t.CATEGORIA
-    if (resumenCategorias[cat]) {
-      resumenCategorias[cat].debitos += t.DEBITOS
-      resumenCategorias[cat].creditos += t.CREDITOS
-      resumenCategorias[cat].cantidad += 1
-    }
-  }
-
-  // Detalle por Categoría
-  const detallePorCategoria = {}
-  for (const cat of [...ORDEN_CATEGORIAS, 'NO CATEGORIZADAS']) {
-    detallePorCategoria[cat] = {}
-  }
-  for (const t of transactions) {
-    const cat = t.CATEGORIA
-    const det = t.DETALLE || ''
-    if (!detallePorCategoria[cat][det]) {
-      detallePorCategoria[cat][det] = { categoria: cat, detalle: det, debitos: 0, creditos: 0, cantidad: 0 }
-    }
-    detallePorCategoria[cat][det].debitos += t.DEBITOS
-    detallePorCategoria[cat][det].creditos += t.CREDITOS
-    detallePorCategoria[cat][det].cantidad += 1
-  }
-
-  return {
+  const initialAnalysis = {
     fileName: file.name,
     account,
     tipo,
@@ -324,14 +355,10 @@ export async function parsePdfExtractoBanco(file) {
     detectedYear,
     saldoAnterior,
     saldoFinal: transactions.length > 0 ? transactions[transactions.length - 1].SALDO : lastSaldo,
-    totalDebitos: transactions.reduce((acc, t) => acc + t.DEBITOS, 0),
-    totalCreditos: transactions.reduce((acc, t) => acc + t.CREDITOS, 0),
-    transactions,
-    listaTotalesDetalle,
-    resumenCategorias: ORDEN_CATEGORIAS.map((cat) => resumenCategorias[cat]),
-    detallePorCategoria,
     numPages
   }
+
+  return recalcularAnalisisBanco(initialAnalysis, transactions)
 }
 
 /**

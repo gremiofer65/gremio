@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import {
   parsePdfExtractoBanco,
+  recalcularAnalisisBanco,
   exportarAnalisisBancoExcel,
   autocompletarExcelConciliacionSindicato,
   ORDEN_CATEGORIAS
@@ -68,6 +69,35 @@ export default function ModuloBancos({
 
   const fileCobrosInputRef = useRef(null)
   const filePagosInputRef = useRef(null)
+
+  // Estado de Modal de Reclasificación de movimientos no categorizados
+  const [isReclassifyModalOpen, setIsReclassifyModalOpen] = useState(false)
+  const [reclassifyPdfTab, setReclassifyPdfTab] = useState('cobros') // 'cobros' | 'pagos'
+
+  // Función para re-categorizar una transacción y recalcular inmediatamente los totales
+  const handleReclassifyTransaction = (targetTab, txId, newCategory, applyToAllMatching = false) => {
+    const isCobros = targetTab === 'cobros'
+    const analisisObj = isCobros ? pdfCobrosAnalisis : pdfPagosAnalisis
+    if (!analisisObj) return
+
+    const targetTx = analisisObj.transactions.find((t) => t.id === txId)
+    if (!targetTx) return
+
+    const updatedTransactions = analisisObj.transactions.map((t) => {
+      if (t.id === txId || (applyToAllMatching && t.DETALLE === targetTx.DETALLE)) {
+        return { ...t, CATEGORIA: newCategory }
+      }
+      return t
+    })
+
+    const updatedAnalisis = recalcularAnalisisBanco(analisisObj, updatedTransactions)
+
+    if (isCobros) {
+      setPdfCobrosAnalisis(updatedAnalisis)
+    } else {
+      setPdfPagosAnalisis(updatedAnalisis)
+    }
+  }
 
   // Estado de Autocompletado del Archivo de Conciliación Sindicato Excel (.xlsx)
   const [isFillingExcel, setIsFillingExcel] = useState(false)
@@ -753,37 +783,97 @@ export default function ModuloBancos({
           {hasAtLeastOnePdf && currentPdfAnalisis && (
             <div className="space-y-4 animate-in fade-in duration-200">
               {/* SELECTOR DE EXTRACTO ACTIVO: COBROS VS PAGOS */}
-              <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800 w-fit">
-                {pdfCobrosAnalisis && (
-                  <button
-                    type="button"
-                    onClick={() => setActivePdfTab('cobros')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                      activePdfTab === 'cobros'
-                        ? 'bg-emerald-600 text-white shadow'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-300"></span>
-                    <span>Cuenta Cobros (2324)</span>
-                  </button>
-                )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800">
+                  {pdfCobrosAnalisis && (
+                    <button
+                      type="button"
+                      onClick={() => setActivePdfTab('cobros')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                        activePdfTab === 'cobros'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-300"></span>
+                      <span>Cuenta Cobros (2324)</span>
+                      {pdfCobrosAnalisis.totalNoCategorizadas > 0 && (
+                        <span className="ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
+                          {pdfCobrosAnalisis.totalNoCategorizadas}
+                        </span>
+                      )}
+                    </button>
+                  )}
 
-                {pdfPagosAnalisis && (
+                  {pdfPagosAnalisis && (
+                    <button
+                      type="button"
+                      onClick={() => setActivePdfTab('pagos')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                        activePdfTab === 'pagos'
+                          ? 'bg-sky-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-sky-300"></span>
+                      <span>Cuenta Pagos (5145)</span>
+                      {pdfPagosAnalisis.totalNoCategorizadas > 0 && (
+                        <span className="ml-1 px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500 text-slate-950">
+                          {pdfPagosAnalisis.totalNoCategorizadas}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {currentPdfAnalisis?.totalNoCategorizadas > 0 && (
                   <button
                     type="button"
-                    onClick={() => setActivePdfTab('pagos')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                      activePdfTab === 'pagos'
-                        ? 'bg-sky-600 text-white shadow'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                    }`}
+                    onClick={() => {
+                      setReclassifyPdfTab(activePdfTab)
+                      setIsReclassifyModalOpen(true)
+                    }}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition cursor-pointer flex items-center gap-1.5 animate-pulse"
                   >
-                    <span className="w-2 h-2 rounded-full bg-sky-300"></span>
-                    <span>Cuenta Pagos (5145)</span>
+                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                    <span>Reclasificar {currentPdfAnalisis.totalNoCategorizadas} No Categorizados</span>
                   </button>
                 )}
               </div>
+
+              {/* BANNER DE ALERTA: MOVIMIENTOS NO CATEGORIZADOS */}
+              {currentPdfAnalisis?.totalNoCategorizadas > 0 && (
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg animate-in fade-in">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl shrink-0 mt-0.5 sm:mt-0">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-bold text-amber-200 flex items-center gap-2">
+                        <span>Se detectaron {currentPdfAnalisis.totalNoCategorizadas} movimiento(s) Sin Categorizar</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          {activePdfTab === 'cobros' ? 'Cuenta Cobros' : 'Cuenta Pagos'}
+                        </span>
+                      </h4>
+                      <p className="text-xs text-amber-300/80 mt-0.5">
+                        Débitos sin clasificar: <strong className="text-white">{fmtMoney(currentPdfAnalisis.noCategorizadasDebitos)}</strong> | Créditos sin clasificar: <strong className="text-white">{fmtMoney(currentPdfAnalisis.noCategorizadasCreditos)}</strong>.
+                        <br className="hidden sm:inline" /> Para que la conciliación y el Excel queden 100% exactos, asigna la categoría correspondiente a cada uno.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReclassifyPdfTab(activePdfTab)
+                      setIsReclassifyModalOpen(true)
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md transition cursor-pointer shrink-0 flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Asignar Categorías ({currentPdfAnalisis.totalNoCategorizadas})</span>
+                  </button>
+                </div>
+              )}
 
               {/* METRICAS HEADER DEL PDF SELECCIONADO */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
@@ -961,10 +1051,36 @@ export default function ModuloBancos({
                                 <td className="py-2 px-3 font-mono text-slate-300 whitespace-nowrap">{t.FECHA}</td>
                                 <td className="py-2 px-3 font-medium text-white max-w-[280px] truncate">{t.DETALLE}</td>
                                 <td className="py-2 px-3 font-mono text-slate-400">{t.COMPROB || '-'}</td>
-                                <td className="py-2 px-3 text-center whitespace-nowrap">
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-sky-300 border border-slate-700">
-                                    {t.CATEGORIA}
-                                  </span>
+                                <td className="py-1.5 px-3 text-center whitespace-nowrap">
+                                  {t.CATEGORIA === 'NO CATEGORIZADAS' ? (
+                                    <select
+                                      value={t.CATEGORIA}
+                                      onChange={(e) => handleReclassifyTransaction(activePdfTab, t.id, e.target.value)}
+                                      className="px-2 py-1 rounded-lg text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/50 hover:bg-amber-500/30 focus:outline-none cursor-pointer animate-pulse"
+                                      title="Movimiento sin categorizar - Selecciona su categoría"
+                                    >
+                                      <option value="NO CATEGORIZADAS">⚠️ NO CATEGORIZADA</option>
+                                      {ORDEN_CATEGORIAS.map((c) => (
+                                        <option key={c} value={c}>
+                                          {c}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <select
+                                      value={t.CATEGORIA}
+                                      onChange={(e) => handleReclassifyTransaction(activePdfTab, t.id, e.target.value)}
+                                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-sky-300 border border-slate-700 hover:border-slate-600 focus:outline-none cursor-pointer"
+                                      title="Clic para cambiar categoría"
+                                    >
+                                      {ORDEN_CATEGORIAS.map((c) => (
+                                        <option key={c} value={c}>
+                                          {c}
+                                        </option>
+                                      ))}
+                                      <option value="NO CATEGORIZADAS">NO CATEGORIZADAS</option>
+                                    </select>
+                                  )}
                                 </td>
                                 <td className="py-2 px-3 font-mono font-bold text-rose-400 text-right whitespace-nowrap">
                                   {t.DEBITOS > 0 ? fmtMoney(t.DEBITOS) : '-'}
@@ -1428,6 +1544,226 @@ export default function ModuloBancos({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA RECLASIFICAR MOVIMIENTOS NO CATEGORIZADOS */}
+      {isReclassifyModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* MODAL HEADER */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                    <span>Reclasificar Movimientos Sin Categorizar</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      Asignación Interactiva
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Asigna la categoría correspondiente para que los totales de la Conciliación y el Excel se actualicen automáticamente.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReclassifyModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* TAB SELECTOR: COBROS VS PAGOS */}
+            <div className="px-4 py-2.5 bg-slate-950 border-b border-slate-800/80 flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                {pdfCobrosAnalisis && (
+                  <button
+                    type="button"
+                    onClick={() => setReclassifyPdfTab('cobros')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      reclassifyPdfTab === 'cobros'
+                        ? 'bg-emerald-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>Cuenta Cobros (2324)</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      (pdfCobrosAnalisis.totalNoCategorizadas || 0) > 0
+                        ? 'bg-amber-500 text-slate-950'
+                        : 'bg-emerald-500/20 text-emerald-300'
+                    }`}>
+                      {pdfCobrosAnalisis.totalNoCategorizadas || 0} pendientes
+                    </span>
+                  </button>
+                )}
+
+                {pdfPagosAnalisis && (
+                  <button
+                    type="button"
+                    onClick={() => setReclassifyPdfTab('pagos')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      reclassifyPdfTab === 'pagos'
+                        ? 'bg-sky-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-sky-400" />
+                    <span>Cuenta Pagos (5145)</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      (pdfPagosAnalisis.totalNoCategorizadas || 0) > 0
+                        ? 'bg-amber-500 text-slate-950'
+                        : 'bg-emerald-500/20 text-emerald-300'
+                    }`}>
+                      {pdfPagosAnalisis.totalNoCategorizadas || 0} pendientes
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                Cambios guardados en tiempo real ⚡
+              </span>
+            </div>
+
+            {/* MODAL BODY */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+              {(() => {
+                const activeAnalisis = reclassifyPdfTab === 'cobros' ? pdfCobrosAnalisis : pdfPagosAnalisis
+                if (!activeAnalisis) {
+                  return (
+                    <div className="p-8 text-center text-slate-400 text-xs">
+                      No hay extracto cargado para esta cuenta.
+                    </div>
+                  )
+                }
+
+                const noCatList = activeAnalisis.transactions.filter((t) => t.CATEGORIA === 'NO CATEGORIZADAS')
+
+                if (noCatList.length === 0) {
+                  return (
+                    <div className="p-8 text-center space-y-3 bg-emerald-950/20 border border-emerald-500/30 rounded-2xl">
+                      <div className="w-12 h-12 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <CheckCircle2 className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-base font-bold text-white">¡Excelente! Todos los movimientos están categorizados</h4>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        No queda ningún movimiento pendiente en la cuenta de <strong className="text-emerald-300">{reclassifyPdfTab === 'cobros' ? 'Cobros (2324)' : 'Pagos (5145)'}</strong>. Ya puedes autocompletar el Excel de Conciliación con total precisión.
+                      </p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-slate-300">
+                        Mostrando <strong className="text-amber-300">{noCatList.length}</strong> movimientos sin clasificar:
+                      </span>
+                      <span className="text-slate-400 font-mono text-[11px]">
+                        Débitos: <strong className="text-rose-400">{fmtMoney(activeAnalisis.noCategorizadasDebitos)}</strong> | Créditos: <strong className="text-emerald-400">{fmtMoney(activeAnalisis.noCategorizadasCreditos)}</strong>
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60">
+                      <table className="w-full text-xs text-left">
+                        <thead className="text-[11px] text-slate-400 bg-slate-900 uppercase border-b border-slate-800 sticky top-0">
+                          <tr>
+                            <th className="py-2.5 px-3">Fecha</th>
+                            <th className="py-2.5 px-3">Detalle Operación</th>
+                            <th className="py-2.5 px-3">Comprobante</th>
+                            <th className="py-2.5 px-3 text-right">Monto ($)</th>
+                            <th className="py-2.5 px-3 min-w-[200px]">Asignar Nueva Categoría</th>
+                            <th className="py-2.5 px-3 text-center">Acción Masiva</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-sans text-xs">
+                          {noCatList.map((t) => {
+                            const isDebito = Number(t.DEBITOS || 0) > 0
+                            const monto = isDebito ? t.DEBITOS : t.CREDITOS
+                            const countMatchingDetalle = activeAnalisis.transactions.filter(
+                              (x) => x.DETALLE === t.DETALLE && x.CATEGORIA === 'NO CATEGORIZADAS'
+                            ).length
+
+                            return (
+                              <tr key={t.id} className="hover:bg-slate-800/40 transition">
+                                <td className="py-2.5 px-3 font-mono text-slate-300 whitespace-nowrap">{t.FECHA}</td>
+                                <td className="py-2.5 px-3 font-medium text-white max-w-[260px] truncate" title={t.DETALLE}>
+                                  {t.DETALLE}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-slate-400">{t.COMPROB || '-'}</td>
+                                <td className={`py-2.5 px-3 font-mono font-bold text-right whitespace-nowrap ${
+                                  isDebito ? 'text-rose-400' : 'text-emerald-400'
+                                }`}>
+                                  {isDebito ? `- ${fmtMoney(monto)}` : `+ ${fmtMoney(monto)}`}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <select
+                                    value={t.CATEGORIA}
+                                    onChange={(e) => handleReclassifyTransaction(reclassifyPdfTab, t.id, e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold focus:outline-none focus:border-sky-500 cursor-pointer"
+                                  >
+                                    <option value="NO CATEGORIZADAS">Seleccionar Categoría...</option>
+                                    {ORDEN_CATEGORIAS.map((cat) => (
+                                      <option key={cat} value={cat}>
+                                        {cat}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  {countMatchingDetalle > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const elegida = window.prompt(
+                                          `Seleccione la categoría para los ${countMatchingDetalle} movimientos con detalle "${t.DETALLE}":\n\n1. IMPUESTOS DEB/CRED\n2. IVA DEBITO\n3. COMISIONES Y GASTOS\n4. CHEQUES DEBITADOS\n5. INTERDEPOSITOS\n6. DEPOSITOS`,
+                                          '1'
+                                        )
+                                        if (elegida) {
+                                          const idx = parseInt(elegida) - 1
+                                          if (ORDEN_CATEGORIAS[idx]) {
+                                            handleReclassifyTransaction(reclassifyPdfTab, t.id, ORDEN_CATEGORIAS[idx], true)
+                                          }
+                                        }
+                                      }}
+                                      className="px-2 py-1 rounded bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[10px] font-bold transition cursor-pointer"
+                                      title={`Hay ${countMatchingDetalle} movimientos con el mismo detalle. Clic para aplicar la misma categoría a todos.`}
+                                    >
+                                      Aplicar a los {countMatchingDetalle}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* MODAL FOOTER */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-slate-400">
+                Los cambios se recalculan instantáneamente en las 4 hojas y en el autocompletado de Excel.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsReclassifyModalOpen(false)}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-lg transition cursor-pointer"
+              >
+                Listo / Guardar
+              </button>
+            </div>
           </div>
         </div>
       )}
