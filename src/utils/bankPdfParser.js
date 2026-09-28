@@ -593,6 +593,16 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
     throw new Error('No hay extractos bancarios analizados para procesar.')
   }
 
+  // Validar que NO existan transacciones sin categorizar
+  const pdfConNoCat = pdfList.filter((p) => (p.totalNoCategorizadas || 0) > 0)
+  if (pdfConNoCat.length > 0) {
+    const totalNoCat = pdfConNoCat.reduce((acc, p) => acc + (p.totalNoCategorizadas || 0), 0)
+    const cuentas = pdfConNoCat.map((p) => p.account).join(', ')
+    throw new Error(
+      `No es posible autocompletar el Excel: Existen ${totalNoCat} movimiento(s) sin categorizar en [${cuentas}]. Asigne una categoría a cada movimiento antes de continuar.`
+    )
+  }
+
   const arrayBuffer = await excelFile.arrayBuffer()
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(arrayBuffer)

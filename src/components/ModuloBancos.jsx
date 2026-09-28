@@ -228,6 +228,16 @@ export default function ModuloBancos({
       return
     }
 
+    const totalSinCat = (pdfCobrosAnalisis?.totalNoCategorizadas || 0) + (pdfPagosAnalisis?.totalNoCategorizadas || 0)
+    if (totalSinCat > 0) {
+      setExcelFillError(
+        `⚠️ No es posible autocompletar el Excel: Existen ${totalSinCat} movimiento(s) sin categorizar. Asigne una categoría a cada movimiento antes de generar la conciliación.`
+      )
+      setReclassifyPdfTab(pdfCobrosAnalisis?.totalNoCategorizadas > 0 ? 'cobros' : 'pagos')
+      setIsReclassifyModalOpen(true)
+      return
+    }
+
     try {
       setIsFillingExcel(true)
       setExcelFillError(null)
@@ -486,6 +496,8 @@ export default function ModuloBancos({
 
   const currentPdfAnalisis = activePdfTab === 'cobros' ? pdfCobrosAnalisis : pdfPagosAnalisis
   const hasAtLeastOnePdf = !!(pdfCobrosAnalisis || pdfPagosAnalisis)
+  const totalPendientesCategorizar = (pdfCobrosAnalisis?.totalNoCategorizadas || 0) + (pdfPagosAnalisis?.totalNoCategorizadas || 0)
+  const hayMovimientosSinCategorizar = totalPendientesCategorizar > 0
 
   return (
     <div className="space-y-4 md:space-y-6 animate-in fade-in duration-150">
@@ -718,22 +730,37 @@ export default function ModuloBancos({
               />
 
               {hasAtLeastOnePdf ? (
-                <label
-                  htmlFor="sindicato-excel-upload"
-                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-xl shadow-purple-600/30 transition cursor-pointer active:scale-95 ${
-                    isFillingExcel ? 'opacity-50 pointer-events-none' : ''
-                  }`}
-                  title="Seleccionar 'Conciliación Sindicato 2026 2027.xlsx' para autocompletar ambas cuentas y descargar en 1 solo paso"
-                >
-                  <FolderOpen className="w-5 h-5 text-amber-300" />
-                  <span>
-                    {isFillingExcel
-                      ? 'Autocompletando ambas cuentas...'
-                      : pdfCobrosAnalisis && pdfPagosAnalisis
-                      ? '🚀 Autocompletar Excel con Cobros y Pagos (1 Clic)'
-                      : '📁 Autocompletar en Excel Sindicato'}
-                  </span>
-                </label>
+                hayMovimientosSinCategorizar ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReclassifyPdfTab(pdfCobrosAnalisis?.totalNoCategorizadas > 0 ? 'cobros' : 'pagos')
+                      setIsReclassifyModalOpen(true)
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xl shadow-amber-500/20 transition cursor-pointer active:scale-95 animate-pulse"
+                    title="Debe asignar categoría a todos los movimientos antes de autocompletar el Excel"
+                  >
+                    <AlertTriangle className="w-5 h-5 text-slate-950" />
+                    <span>⚠️ Bloqueado: {totalPendientesCategorizar} Sin Categorizar (Clic para Asignar)</span>
+                  </button>
+                ) : (
+                  <label
+                    htmlFor="sindicato-excel-upload"
+                    className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-xl shadow-purple-600/30 transition cursor-pointer active:scale-95 ${
+                      isFillingExcel ? 'opacity-50 pointer-events-none' : ''
+                    }`}
+                    title="Seleccionar 'Conciliación Sindicato 2026 2027.xlsx' para autocompletar ambas cuentas y descargar en 1 solo paso"
+                  >
+                    <FolderOpen className="w-5 h-5 text-amber-300" />
+                    <span>
+                      {isFillingExcel
+                        ? 'Autocompletando ambas cuentas...'
+                        : pdfCobrosAnalisis && pdfPagosAnalisis
+                        ? '🚀 Autocompletar Excel con Cobros y Pagos (1 Clic)'
+                        : '📁 Autocompletar en Excel Sindicato'}
+                    </span>
+                  </label>
+                )
               ) : (
                 <p className="text-xs text-slate-500 italic">
                   Sube al menos un extracto PDF arriba para habilitar el autocompletado del Excel.
