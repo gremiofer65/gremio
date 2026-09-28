@@ -122,6 +122,19 @@ const getTodayLocalDate = () => {
   return `${year}-${month}-${day}`
 }
 
+export const formatDateDMY = (dateStr) => {
+  if (!dateStr) return '-'
+  const str = String(dateStr).trim()
+  if (!str) return '-'
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(str)) return str
+  const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
+  }
+  return str
+}
+
 const BANCOS_ARGENTINA = [
   'Banco de la Nación Argentina (BNA)',
   'Banco de la Provincia de Buenos Aires (BAPRO)',
@@ -1691,7 +1704,7 @@ export default function App() {
       } else if (isPagado) {
         status = 'PAGADO'
         severity = 'success'
-        label = m.fechaPago ? `✓ Cobrado (${m.fechaPago})` : '✓ Cobrado / Pagado'
+        label = m.fechaPago ? `✓ Cobrado (${formatDateDMY(m.fechaPago)})` : '✓ Cobrado / Pagado'
       } else if (diffDays < 0) {
         status = 'VENCIDO'
         severity = 'danger'
@@ -1840,8 +1853,8 @@ export default function App() {
       `"${c.tipo}"`,
       `"${c.formato}"`,
       `"${c.label}"`,
-      `"${c.fechaCobro || ''}"`,
-      `"${c.movimiento.fecha || ''}"`,
+      `"${formatDateDMY(c.fechaCobro)}"`,
+      `"${formatDateDMY(c.movimiento.fecha)}"`,
       `"${(c.chequeRef || '').replace(/"/g, '""')}"`,
       `"${(c.movimiento.detalle || '').replace(/"/g, '""')}"`,
       Number(c.importe || 0).toFixed(2),
@@ -4909,7 +4922,7 @@ export default function App() {
                       Reporte de Gestión y Cartera de Cheques
                     </h1>
                     <p className="text-xs text-slate-700">
-                      Gremio / Policlínica AMOS • Período: {selectedMes} • Fecha de emisión: {getTodayLocalDate()}
+                      Gremio / Policlínica AMOS • Período: {selectedMes} • Fecha de emisión: {formatDateDMY(getTodayLocalDate())}
                     </p>
                   </div>
                   <div className="text-right">
@@ -4985,7 +4998,7 @@ export default function App() {
                                     <span>{item.label}</span>
                                   </span>
                                   <span className="text-[10px] text-slate-400 font-mono">
-                                    Cobro: {item.fechaCobro}
+                                    Cobro: {formatDateDMY(item.fechaCobro)}
                                   </span>
                                 </div>
                               </td>
@@ -5034,7 +5047,7 @@ export default function App() {
                               </td>
 
                               <td className="py-3 px-3 text-slate-400 whitespace-nowrap font-mono text-[11px]">
-                                {item.movimiento.fecha}
+                                {formatDateDMY(item.movimiento.fecha)}
                               </td>
 
                               <td className="py-3 px-4 text-right font-mono font-bold text-white whitespace-nowrap text-sm">

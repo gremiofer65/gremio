@@ -33,6 +33,19 @@ import {
   CreditCard
 } from 'lucide-react'
 
+const formatDateDMY = (dateStr) => {
+  if (!dateStr) return '-'
+  const str = String(dateStr).trim()
+  if (!str) return '-'
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(str)) return str
+  const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`
+  }
+  return str
+}
+
 // Listas base de respaldo si Tablas Maestras estuviera vacía
 export const CONCEPTOS_INGRESOS_FALLBACK = [
   'Alquiler Campo de Deportes / Salón',
@@ -1831,7 +1844,7 @@ export default function CajaDiaria({
                                 </span>
                               </div>
                               <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                                {chq.chequeRef} • Vence: {chq.fechaCobro || 'Al día'}
+                                {chq.chequeRef} • Vence: {chq.fechaCobro ? formatDateDMY(chq.fechaCobro) : 'Al día'}
                               </p>
                             </div>
                           </div>
