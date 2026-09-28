@@ -84,8 +84,8 @@ function normText(str = '') {
   return (str || '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Quita tildes
-    .replace(/[^a-z0-9]/g, '')       // Solo alfanuméricos
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
 }
 
 /**
@@ -316,6 +316,7 @@ export async function parsePdfExtractoBanco(file) {
   }
 
   return {
+    fileName: file.name,
     account,
     tipo,
     periodo,
@@ -341,7 +342,6 @@ export function exportarAnalisisBancoExcel(analisis) {
 
   const wb = XLSX.utils.book_new()
 
-  // 1. Hoja 1: Estado de Cuenta
   const ws1Data = [
     [`Cuenta: ${analisis.account}`],
     [`Tipo: ${analisis.tipo}`],
@@ -355,7 +355,6 @@ export function exportarAnalisisBancoExcel(analisis) {
   const ws1 = XLSX.utils.aoa_to_sheet(ws1Data)
   XLSX.utils.book_append_sheet(wb, ws1, 'Estado de Cuenta')
 
-  // 2. Hoja 2: Totales por Detalle
   const ws2Data = [
     [`Cuenta: ${analisis.account}`],
     [`Tipo: ${analisis.tipo}`],
@@ -370,7 +369,6 @@ export function exportarAnalisisBancoExcel(analisis) {
   const ws2 = XLSX.utils.aoa_to_sheet(ws2Data)
   XLSX.utils.book_append_sheet(wb, ws2, 'Totales por Detalle')
 
-  // 3. Hoja 3: Resumen por Categoria
   const ws3Data = [
     [`Cuenta: ${analisis.account}`],
     [`Tipo: ${analisis.tipo}`],
@@ -385,7 +383,6 @@ export function exportarAnalisisBancoExcel(analisis) {
   const ws3 = XLSX.utils.aoa_to_sheet(ws3Data)
   XLSX.utils.book_append_sheet(wb, ws3, 'Resumen por Categoria')
 
-  // 4. Hoja 4: Detalle por Categoria
   const ws4Data = [
     [`Cuenta: ${analisis.account}`],
     [`Tipo: ${analisis.tipo}`],
@@ -409,68 +406,20 @@ export function exportarAnalisisBancoExcel(analisis) {
 }
 
 /**
- * Autocompleta el archivo oficial de Conciliación Sindicato (.xlsx)
- * PRESERVANDO AL 100% todos los estilos, colores, fuentes, bordes, tamaños de fila y fórmulas
- * mediante coincidencia EXACTA de etiquetas (sin tocar depósitos ni cheques pendientes).
+ * Helper interno para rellenar una cuenta específica (Cobros o Pagos) dentro de una hoja de ExcelJS
  */
-export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnalisis, targetSheetName = null) {
-  if (!excelFile || !pdfAnalisis) {
-    throw new Error('Debe proporcionar el archivo de Excel y el extracto PDF analizado.')
-  }
+function fillAccountInWorksheet(targetWs, pdfItem) {
+  if (!targetWs || !pdfItem) return
 
-  const arrayBuffer = await excelFile.arrayBuffer()
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(arrayBuffer)
+  const isPagos = pdfItem.account.includes('2341055145') || pdfItem.tipo === 'Pagos'
+  const labelColIdx = isPagos ? 7 : 1 // Columna G (7) ó A (1)
+  const valColIdx = isPagos ? 8 : 2   // Columna H (8) ó B (2)
 
-  // 1. Identificar la hoja correspondiente (ej: "Conciliac Sept 2026", "Conciliac Ago 2026", etc.)
-  let targetWs = null
-  let foundSheetName = targetSheetName
-
-  const sheetNames = []
-  workbook.eachSheet((worksheet) => {
-    sheetNames.push(worksheet.name)
-  })
-
-  if (!foundSheetName) {
-    const monthNames = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sept', 'Octub', 'Nov', 'Dic'
-    ]
-    const mNum = pdfAnalisis.detectedMonthNumber || 9
-    const mPrefix = monthNames[mNum - 1]
-    const yr = pdfAnalisis.detectedYear || '2026'
-
-    foundSheetName = sheetNames.find((s) => {
-      const sLow = s.toLowerCase()
-      return sLow.includes(mPrefix.toLowerCase()) && (sLow.includes(yr) || sLow.includes(yr.slice(-2)))
-    })
-
-    if (!foundSheetName) {
-      foundSheetName = sheetNames.find((s) => s.toLowerCase().includes(mPrefix.toLowerCase()))
-    }
-  }
-
-  if (foundSheetName) {
-    targetWs = workbook.getWorksheet(foundSheetName)
-  }
-
-  if (!targetWs) {
-    throw new Error(`No se encontró una hoja para el período en el archivo Excel. Hojas disponibles: ${sheetNames.join(', ')}`)
-  }
-
-  // 2. Determinar si es Cuenta Cobros (Columna B / izquierda) o Cuenta Pagos (Columna H / derecha)
-  const isPagos = pdfAnalisis.account.includes('2341055145') || pdfAnalisis.tipo === 'Pagos'
-
-  const labelColIdx = isPagos ? 7 : 1 // Columna G = 7 ó Columna A = 1
-  const valColIdx = isPagos ? 8 : 2   // Columna H = 8 ó Columna B = 2
-
-  // Obtener los totales por categoría del análisis
   const catTotals = {}
-  pdfAnalisis.resumenCategorias.forEach((c) => {
+  pdfItem.resumenCategorias.forEach((c) => {
     catTotals[c.categoria] = c
   })
 
-  // 3. Mapear e insertar valores fila por fila con COINCIDENCIA EXACTA DE ETIQUETA
   targetWs.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber > 45) return
 
@@ -483,7 +432,6 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
 
     const targetCell = row.getCell(valColIdx)
 
-    // Función para actualizar solo el valor numérico conservando estilos
     const setAmount = (val) => {
       const numVal = Number(Number(val || 0).toFixed(2))
       targetCell.value = numVal
@@ -492,47 +440,32 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
       }
     }
 
-    // A. Saldo anterior
-    if (labelNorm === 'saldoanteriorsbco' && pdfAnalisis.saldoAnterior !== null && pdfAnalisis.saldoAnterior !== undefined) {
-      setAmount(pdfAnalisis.saldoAnterior)
-    }
-    // B. Impuestos Débito/Crédito (Ley 25.413)
-    else if (labelNorm === 'impuestosdebcred') {
+    if (labelNorm === 'saldoanteriorsbco' && pdfItem.saldoAnterior !== null && pdfItem.saldoAnterior !== undefined) {
+      setAmount(pdfItem.saldoAnterior)
+    } else if (labelNorm === 'impuestosdebcred') {
       const deb = catTotals['IMPUESTOS DEB/CRED'] ? catTotals['IMPUESTOS DEB/CRED'].debitos : 0
       setAmount(deb)
-    }
-    // C. IVA Débito
-    else if (labelNorm === 'ivadebito') {
+    } else if (labelNorm === 'ivadebito') {
       const deb = catTotals['IVA DEBITO'] ? catTotals['IVA DEBITO'].debitos : 0
       setAmount(deb)
-    }
-    // D. Comisiones y Gastos
-    else if (labelNorm === 'comisionesygastos') {
+    } else if (labelNorm === 'comisionesygastos') {
       const deb = catTotals['COMISIONES Y GASTOS'] ? catTotals['COMISIONES Y GASTOS'].debitos : 0
       setAmount(deb)
-    }
-    // E. Cheques Debitados
-    else if (labelNorm === 'chequesdebitados') {
+    } else if (labelNorm === 'chequesdebitados') {
       const deb = catTotals['CHEQUES DEBITADOS'] ? catTotals['CHEQUES DEBITADOS'].debitos : 0
       setAmount(deb)
-    }
-    // F. Interdepósitos
-    else if (labelNorm === 'interdepositos') {
+    } else if (labelNorm === 'interdepositos') {
       const deb = catTotals['INTERDEPOSITOS'] ? catTotals['INTERDEPOSITOS'].debitos : 0
       setAmount(deb)
-    }
-    // G. Depósitos (Créditos en el banco) - SOLO cuando la etiqueta sea EXACTAMENTE "DEPÓSITOS", NUNCA si dice "PENDIENTES"
-    else if (labelNorm === 'depositos') {
+    } else if (labelNorm === 'depositos') {
       const cred = catTotals['DEPOSITOS'] ? catTotals['DEPOSITOS'].creditos : 0
       setAmount(cred)
-    }
-    // H. Subtotal
-    else if (labelNorm === 'subtotal' && pdfAnalisis.saldoFinal !== null && pdfAnalisis.saldoFinal !== undefined) {
-      setAmount(pdfAnalisis.saldoFinal)
+    } else if (labelNorm === 'subtotal' && pdfItem.saldoFinal !== null && pdfItem.saldoFinal !== undefined) {
+      setAmount(pdfItem.saldoFinal)
     }
   })
 
-  // 4. Actualizar celda de Saldo Contable si existe en la fila inferior
+  // Actualizar Saldo Contable si existe en la fila inferior
   for (let r = 25; r <= 35; r++) {
     const row = targetWs.getRow(r)
     const nextCell = row.getCell(valColIdx + 1)
@@ -540,14 +473,75 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
 
     if (nextVal === 'saldocontable') {
       const targetCell = row.getCell(valColIdx)
-      if (pdfAnalisis.saldoFinal !== null && pdfAnalisis.saldoFinal !== undefined) {
-        targetCell.value = Number(Number(pdfAnalisis.saldoFinal).toFixed(2))
+      if (pdfItem.saldoFinal !== null && pdfItem.saldoFinal !== undefined) {
+        targetCell.value = Number(Number(pdfItem.saldoFinal).toFixed(2))
         if (!targetCell.numFmt) targetCell.numFmt = '#,##0.00'
       }
     }
   }
+}
 
-  // 5. Escribir el libro completo con ExcelJS
+/**
+ * Autocompleta el archivo oficial de Conciliación Sindicato (.xlsx)
+ * Acepta UN SOLO PDF o una LISTA DE PDFs (Cobros y Pagos) y rellena ambas columnas en un solo paso
+ * preservando el 100% de formatos, colores y fórmulas.
+ */
+export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnalisisOrList, targetSheetName = null) {
+  if (!excelFile || !pdfAnalisisOrList) {
+    throw new Error('Debe proporcionar el archivo de Excel y los extractos PDF analizados.')
+  }
+
+  const pdfList = Array.isArray(pdfAnalisisOrList) ? pdfAnalisisOrList : [pdfAnalisisOrList]
+  if (pdfList.length === 0) {
+    throw new Error('No hay extractos bancarios analizados para procesar.')
+  }
+
+  const arrayBuffer = await excelFile.arrayBuffer()
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(arrayBuffer)
+
+  const sheetNames = []
+  workbook.eachSheet((worksheet) => {
+    sheetNames.push(worksheet.name)
+  })
+
+  // 1. Identificar la hoja del mes correspondiente a partir del primer PDF disponible
+  const primerPdf = pdfList[0]
+  let foundSheetName = targetSheetName
+
+  if (!foundSheetName) {
+    const monthNames = [
+      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+      'Jul', 'Ago', 'Sept', 'Octub', 'Nov', 'Dic'
+    ]
+    const mNum = primerPdf.detectedMonthNumber || 9
+    const mPrefix = monthNames[mNum - 1]
+    const yr = primerPdf.detectedYear || '2026'
+
+    foundSheetName = sheetNames.find((s) => {
+      const sLow = s.toLowerCase()
+      return sLow.includes(mPrefix.toLowerCase()) && (sLow.includes(yr) || sLow.includes(yr.slice(-2)))
+    })
+
+    if (!foundSheetName) {
+      foundSheetName = sheetNames.find((s) => s.toLowerCase().includes(mPrefix.toLowerCase()))
+    }
+  }
+
+  const targetWs = foundSheetName ? workbook.getWorksheet(foundSheetName) : null
+  if (!targetWs) {
+    throw new Error(`No se encontró la hoja para el período en el archivo Excel. Hojas disponibles: ${sheetNames.join(', ')}`)
+  }
+
+  // 2. Rellenar las columnas de CADA PDF cargado (Cobros 2324 y/o Pagos 5145)
+  const cuentasActualizadas = []
+  for (const pdfItem of pdfList) {
+    fillAccountInWorksheet(targetWs, pdfItem)
+    const isPagos = pdfItem.account.includes('2341055145') || pdfItem.tipo === 'Pagos'
+    cuentasActualizadas.push(isPagos ? '23410551/45 (Pagos)' : '23410523/24 (Cobros)')
+  }
+
+  // 3. Escribir y descargar el archivo Excel actualizado con ambas columnas completadas
   const updatedBuffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([updatedBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
@@ -564,6 +558,6 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
   return {
     success: true,
     sheetUpdated: foundSheetName,
-    cuentaActualizada: isPagos ? '23410551/45 (Pagos)' : '23410523/24 (Cobros)'
+    cuentasActualizadas: cuentasActualizadas.join(' y ')
   }
 }

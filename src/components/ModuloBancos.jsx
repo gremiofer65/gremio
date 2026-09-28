@@ -53,14 +53,21 @@ export default function ModuloBancos({
   const [filterEstadoConciliacion, setFilterEstadoConciliacion] = useState('TODOS') // 'TODOS' | 'CONCILIADOS' | 'PENDIENTES'
   const [searchTerm, setSearchTerm] = useState('')
 
-  // Estado del Analizador de Extractos PDF (Programa Banco Original)
-  const [isProcessingPdf, setIsProcessingPdf] = useState(false)
-  const [pdfAnalisis, setPdfAnalisis] = useState(null)
+  // Estado del Analizador de Extractos PDF (Soporta 1 o 2 archivos PDF simultáneos: Cobros y Pagos)
+  const [isProcessingPdfCobros, setIsProcessingPdfCobros] = useState(false)
+  const [isProcessingPdfPagos, setIsProcessingPdfPagos] = useState(false)
+  const [pdfCobrosAnalisis, setPdfCobrosAnalisis] = useState(null)
+  const [pdfPagosAnalisis, setPdfPagosAnalisis] = useState(null)
   const [pdfError, setPdfError] = useState(null)
+  
+  // Tab activo de visualización de PDF: 'cobros' | 'pagos'
+  const [activePdfTab, setActivePdfTab] = useState('cobros')
   const [pdfViewTab, setPdfViewTab] = useState('movimientos') // 'movimientos' | 'totalesDetalle' | 'resumenCat' | 'detalleCat'
   const [pdfSearchTerm, setPdfSearchTerm] = useState('')
   const [pdfCatFilter, setPdfCatFilter] = useState('TODAS')
-  const fileInputRef = useRef(null)
+
+  const fileCobrosInputRef = useRef(null)
+  const filePagosInputRef = useRef(null)
 
   // Estado de Autocompletado del Archivo de Conciliación Sindicato Excel (.xlsx)
   const [isFillingExcel, setIsFillingExcel] = useState(false)
@@ -124,9 +131,8 @@ export default function ModuloBancos({
     importe: ''
   })
 
-  // Procesar archivo PDF subido por el usuario
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0]
+  // Procesar archivo PDF específico (Cobros o Pagos)
+  const handleProcessPdfFile = async (file, targetType) => {
     if (!file) return
 
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
@@ -135,30 +141,45 @@ export default function ModuloBancos({
     }
 
     try {
-      setIsProcessingPdf(true)
+      if (targetType === 'COBROS') setIsProcessingPdfCobros(true)
+      else setIsProcessingPdfPagos(true)
+
       setPdfError(null)
       setExcelFillResult(null)
       setExcelFillError(null)
+
       const resultado = await parsePdfExtractoBanco(file)
       
       if (!resultado || !resultado.transactions || resultado.transactions.length === 0) {
-        setPdfError('No se encontraron transacciones en el PDF analizado. Verifique que sea un extracto válido de Banco Provincia / Link.')
+        setPdfError(`No se encontraron transacciones en el PDF de ${targetType}. Verifique el archivo.`)
       } else {
-        setPdfAnalisis(resultado)
+        if (targetType === 'COBROS') {
+          setPdfCobrosAnalisis(resultado)
+          setActivePdfTab('cobros')
+        } else {
+          setPdfPagosAnalisis(resultado)
+          setActivePdfTab('pagos')
+        }
+
         if (resultado.saldoFinal !== null && resultado.saldoFinal !== undefined) {
           handleUpdateExtractoSaldo(resultado.saldoFinal)
         }
       }
     } catch (err) {
-      console.error('Error procesando PDF de banco:', err)
-      setPdfError('Ocurrió un error al leer el archivo PDF: ' + (err.message || 'Error desconocido'))
+      console.error(`Error procesando PDF de ${targetType}:`, err)
+      setPdfError(`Error al leer el PDF de ${targetType}: ` + (err.message || 'Error desconocido'))
     } finally {
-      setIsProcessingPdf(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
+      if (targetType === 'COBROS') {
+        setIsProcessingPdfCobros(false)
+        if (fileCobrosInputRef.current) fileCobrosInputRef.current.value = ''
+      } else {
+        setIsProcessingPdfPagos(false)
+        if (filePagosInputRef.current) filePagosInputRef.current.value = ''
+      }
     }
   }
 
-  // Autocompletar el archivo de Conciliación Sindicato Excel seleccionado por el usuario
+  // Autocompletar el archivo de Conciliación Sindicato Excel (.xlsx) con los PDFs cargados (Cobros y/o Pagos)
   const handleExcelFillUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -168,8 +189,12 @@ export default function ModuloBancos({
       return
     }
 
-    if (!pdfAnalisis) {
-      setExcelFillError('Primero debe cargar y analizar un extracto PDF para poder rellenar el Excel.')
+    const pdfList = []
+    if (pdfCobrosAnalisis) pdfList.push(pdfCobrosAnalisis)
+    if (pdfPagosAnalisis) pdfList.push(pdfPagosAnalisis)
+
+    if (pdfList.length === 0) {
+      setExcelFillError('Debe cargar al menos un extracto PDF (Cobros o Pagos) antes de autocompletar.')
       return
     }
 
@@ -178,7 +203,7 @@ export default function ModuloBancos({
       setExcelFillError(null)
       setExcelFillResult(null)
 
-      const result = await autocompletarExcelConciliacionSindicato(file, pdfAnalisis)
+      const result = await autocompletarExcelConciliacionSindicato(file, pdfList)
       setExcelFillResult(result)
     } catch (err) {
       console.error('Error autocompletando Excel de conciliación:', err)
@@ -189,20 +214,20 @@ export default function ModuloBancos({
     }
   }
 
-  // Incorporar los débitos/gastos del extracto PDF analizado al sistema contable
-  const handleImportarGastosAlSistema = async () => {
-    if (!pdfAnalisis || !pdfAnalisis.transactions) return
+  // Incorporar los débitos/gastos del extracto PDF seleccionado al sistema contable
+  const handleImportarGastosAlSistema = async (analisisObj) => {
+    if (!analisisObj || !analisisObj.transactions) return
     if (isCurrentPeriodoCerrado) {
       alert(`⚠️ El período actual (${selectedMes}) se encuentra CERRADO Y BLOQUEADO.\nNo es posible importar movimientos a un período cerrado.`)
       return
     }
 
     const confirmacion = window.confirm(
-      `¿Desea importar automáticamente los ${pdfAnalisis.transactions.length} movimientos del extracto al Libro Diario / Movimientos de ${selectedMes}?`
+      `¿Desea importar automáticamente los ${analisisObj.transactions.length} movimientos de la cuenta ${analisisObj.account} al Libro Diario / Movimientos de ${selectedMes}?`
     )
     if (!confirmacion) return
 
-    const nuevosMovimientos = pdfAnalisis.transactions.map((t, idx) => {
+    const nuevosMovimientos = analisisObj.transactions.map((t, idx) => {
       const isIngreso = t.CREDITOS > 0 && t.DEBITOS === 0
       const importe = isIngreso ? t.CREDITOS : t.DEBITOS
 
@@ -211,7 +236,7 @@ export default function ModuloBancos({
         fecha: t.FECHA.length === 8 ? `20${t.FECHA.slice(6, 8)}-${t.FECHA.slice(3, 5)}-${t.FECHA.slice(0, 2)}` : t.FECHA,
         facturaNro: t.COMPROB ? `BCO-${t.COMPROB}` : null,
         rubro: isIngreso ? 'INGRESOS' : t.CATEGORIA === 'IMPUESTOS DEB/CRED' || t.CATEGORIA === 'IVA DEBITO' ? 'IMPUESTO' : 'Comisiones Bancarias',
-        empresaConcepto: pdfAnalisis.account.includes('2341052324') ? 'Banco Provincia - Cobros (2324)' : 'Banco Provincia - Pagos (5145)',
+        empresaConcepto: analisisObj.account.includes('2341052324') ? 'Banco Provincia - Cobros (2324)' : 'Banco Provincia - Pagos (5145)',
         detalle: `${t.CATEGORIA}: ${t.DETALLE}`,
         detalleExtenso: `Extracto Bancario N° ${t.COMPROB || '-'} | Saldo Cta: ${fmtMoney(t.SALDO)}`,
         realizadoEn: 'Operaciones en Banco',
@@ -221,7 +246,7 @@ export default function ModuloBancos({
         pagosS: isIngreso ? 0 : importe,
         ingresosS: isIngreso ? importe : 0,
         total: importe,
-        observaciones: `Importado desde Extracto PDF (${pdfAnalisis.account})`
+        observaciones: `Importado desde Extracto PDF (${analisisObj.account})`
       }
     })
 
@@ -259,7 +284,6 @@ export default function ModuloBancos({
   // Filtrar movimientos bancarios (créditos y débitos en banco)
   const movimientosBancarios = useMemo(() => {
     return movimientos.filter((m) => {
-      // Movimientos que pasan por banco (transferencias, cheques depositados/emitidos, débitos, comisiones)
       const ref = `${m.chequeOperacion || ''} ${m.detalle || ''} ${m.empresaConcepto || ''} ${m.rubro || ''}`.toUpperCase()
       
       const esBancario =
@@ -430,6 +454,9 @@ export default function ModuloBancos({
     document.body.removeChild(link)
   }
 
+  const currentPdfAnalisis = activePdfTab === 'cobros' ? pdfCobrosAnalisis : pdfPagosAnalisis
+  const hasAtLeastOnePdf = !!(pdfCobrosAnalisis || pdfPagosAnalisis)
+
   return (
     <div className="space-y-4 md:space-y-6 animate-in fade-in duration-150">
       {/* HEADER & SUBTABS NAVIGATION */}
@@ -440,13 +467,13 @@ export default function ModuloBancos({
           </div>
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-              <span>Módulo Bancos & Programa Generador de Extractos</span>
+              <span>Módulo Bancos & Generador de Conciliaciones</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full font-extrabold bg-sky-500/20 text-sky-400 border border-sky-500/30">
                 PROVINCIA / LINK
               </span>
             </h1>
             <p className="text-xs text-slate-400">
-              Conciliación bancaria en tiempo real, importación y categorización inteligente de extractos en PDF.
+              Conciliación bancaria en tiempo real, importación y autocompletado simultáneo de Cobros y Pagos.
             </p>
           </div>
         </div>
@@ -477,7 +504,7 @@ export default function ModuloBancos({
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
             <span>Generador Extractos PDF</span>
-            {pdfAnalisis && (
+            {hasAtLeastOnePdf && (
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             )}
           </button>
@@ -485,140 +512,305 @@ export default function ModuloBancos({
       </div>
 
       {/* ========================================================= */}
-      {/* VISTA 1: GENERADOR Y PROCESADOR DE EXTRACTOS PDF (PROGRAMA BANCO) */}
+      {/* VISTA 1: GENERADOR Y PROCESADOR DE EXTRACTOS PDF (COBROS Y PAGOS) */}
       {/* ========================================================= */}
       {activeSubTab === 'analisisPdf' && (
         <div className="space-y-4 animate-in fade-in duration-150">
-          {/* DRAG AND DROP / UPLOAD BOX */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-lg text-center relative overflow-hidden">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".pdf,application/pdf"
-              className="hidden"
-              id="bank-pdf-upload"
-            />
+          {/* DUAL UPLOAD BOX: COBROS (2324) Y PAGOS (5145) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-lg space-y-5">
+            <div className="text-center max-w-xl mx-auto">
+              <h3 className="text-base font-bold text-white flex items-center justify-center gap-2">
+                <UploadCloud className="w-5 h-5 text-sky-400" />
+                <span>Cargar Extractos Bancarios (Cobros y Pagos)</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Sube ambos PDFs del mes. Luego con el botón de abajo seleccionas el Excel y se autocompletarán ambas cuentas en una sola descarga.
+              </p>
+            </div>
 
-            {/* Hidden Input para Cargar Plantilla de Conciliación Sindicato Excel */}
-            <input
-              type="file"
-              ref={excelFillInputRef}
-              onChange={handleExcelFillUpload}
-              accept=".xlsx,.xls"
-              className="hidden"
-              id="sindicato-excel-upload"
-            />
+            {/* DOS TARJETAS DE CARGA: COBROS Y PAGOS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* TARJETA 1: CUENTA COBROS (2341052324) */}
+              <div className={`p-4 rounded-xl border transition ${
+                pdfCobrosAnalisis
+                  ? 'bg-emerald-950/20 border-emerald-500/40'
+                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+              }`}>
+                <input
+                  type="file"
+                  ref={fileCobrosInputRef}
+                  onChange={(e) => handleProcessPdfFile(e.target.files?.[0], 'COBROS')}
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  id="pdf-cobros-upload"
+                />
 
-            <div className="max-w-xl mx-auto space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 mx-auto shadow-inner">
-                <UploadCloud className="w-7 h-7" />
-              </div>
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <strong className="text-xs font-bold text-white">1. Cuenta Cobros (23410523/24)</strong>
+                  </div>
+                  {pdfCobrosAnalisis && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      ✓ Cargado
+                    </span>
+                  )}
+                </div>
 
-              <div>
-                <h3 className="text-base font-bold text-white">
-                  1. Cargar Extracto Bancario en PDF (Banco Provincia / Link)
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Arrastra o selecciona el PDF oficial de "Estado de Cuenta". El sistema procesará automáticamente las transacciones, detectará cuentas (2341052324 Cobros / 2341055145 Pagos) y categorizará débitos/créditos.
-                </p>
-              </div>
+                <div className="py-3 text-xs space-y-1">
+                  {pdfCobrosAnalisis ? (
+                    <>
+                      <p className="text-slate-300 truncate font-mono text-[11px]">
+                        📄 {pdfCobrosAnalisis.fileName || 'Extracto Cobros.pdf'}
+                      </p>
+                      <p className="text-slate-400 text-[11px]">
+                        Período: <strong className="text-white">{pdfCobrosAnalisis.periodo}</strong> ({pdfCobrosAnalisis.transactions.length} movs)
+                      </p>
+                      <p className="text-emerald-400 font-bold font-mono">
+                        Saldo Final: {fmtMoney(pdfCobrosAnalisis.saldoFinal)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-slate-500 text-[11px]">
+                      Selecciona el extracto bancario PDF correspondiente a la cuenta de Cobros / Recaudaciones.
+                    </p>
+                  )}
+                </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <label
-                  htmlFor="bank-pdf-upload"
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white shadow-lg shadow-sky-600/30 transition cursor-pointer active:scale-95 ${
-                    isProcessingPdf ? 'opacity-50 pointer-events-none' : ''
-                  }`}
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>{isProcessingPdf ? 'Analizando PDF...' : 'Seleccionar Archivo PDF'}</span>
-                </label>
-
-                {pdfAnalisis && (
-                  <>
+                <div className="pt-2 flex items-center gap-2">
+                  <label
+                    htmlFor="pdf-cobros-upload"
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer active:scale-95 ${
+                      pdfCobrosAnalisis
+                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20'
+                    } ${isProcessingPdfCobros ? 'opacity-50 pointer-events-none' : ''}`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>{isProcessingPdfCobros ? 'Procesando...' : pdfCobrosAnalisis ? 'Reemplazar PDF Cobros' : 'Subir PDF Cobros'}</span>
+                  </label>
+                  {pdfCobrosAnalisis && (
                     <button
                       type="button"
-                      onClick={() => exportarAnalisisBancoExcel(pdfAnalisis)}
-                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 transition cursor-pointer active:scale-95"
-                      title="Descargar Excel con las 4 Hojas (Estado de Cuenta, Totales por Detalle, Resumen Categoría, Detalle Categoría)"
+                      onClick={() => setPdfCobrosAnalisis(null)}
+                      className="p-2 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+                      title="Quitar extracto de Cobros"
                     >
-                      <Download className="w-4 h-4" />
-                      <span>Descargar Excel 4 Hojas (.xlsx)</span>
+                      <X className="w-3.5 h-3.5" />
                     </button>
+                  )}
+                </div>
+              </div>
 
-                    {/* BOTON PARA AUTOCOMPLETAR EL ARCHIVO EXCEL DE CONCILIACIÓN SINDICATO */}
-                    <label
-                      htmlFor="sindicato-excel-upload"
-                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 transition cursor-pointer active:scale-95 ${
-                        isFillingExcel ? 'opacity-50 pointer-events-none' : ''
-                      }`}
-                      title="Seleccionar la planilla 'Conciliación Sindicato 2026 2027.xlsx' para rellenar automáticamente la columna correspondiente"
+              {/* TARJETA 2: CUENTA PAGOS (2341055145) */}
+              <div className={`p-4 rounded-xl border transition ${
+                pdfPagosAnalisis
+                  ? 'bg-sky-950/20 border-sky-500/40'
+                  : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+              }`}>
+                <input
+                  type="file"
+                  ref={filePagosInputRef}
+                  onChange={(e) => handleProcessPdfFile(e.target.files?.[0], 'PAGOS')}
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  id="pdf-pagos-upload"
+                />
+
+                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800/80">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+                    <strong className="text-xs font-bold text-white">2. Cuenta Pagos (23410551/45)</strong>
+                  </div>
+                  {pdfPagosAnalisis && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                      ✓ Cargado
+                    </span>
+                  )}
+                </div>
+
+                <div className="py-3 text-xs space-y-1">
+                  {pdfPagosAnalisis ? (
+                    <>
+                      <p className="text-slate-300 truncate font-mono text-[11px]">
+                        📄 {pdfPagosAnalisis.fileName || 'Extracto Pagos.pdf'}
+                      </p>
+                      <p className="text-slate-400 text-[11px]">
+                        Período: <strong className="text-white">{pdfPagosAnalisis.periodo}</strong> ({pdfPagosAnalisis.transactions.length} movs)
+                      </p>
+                      <p className="text-sky-400 font-bold font-mono">
+                        Saldo Final: {fmtMoney(pdfPagosAnalisis.saldoFinal)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-slate-500 text-[11px]">
+                      Selecciona el extracto bancario PDF correspondiente a la cuenta de Pagos / Proveedores.
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-2 flex items-center gap-2">
+                  <label
+                    htmlFor="pdf-pagos-upload"
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer active:scale-95 ${
+                      pdfPagosAnalisis
+                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                        : 'bg-sky-600 hover:bg-sky-500 text-white shadow-md shadow-sky-600/20'
+                    } ${isProcessingPdfPagos ? 'opacity-50 pointer-events-none' : ''}`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>{isProcessingPdfPagos ? 'Procesando...' : pdfPagosAnalisis ? 'Reemplazar PDF Pagos' : 'Subir PDF Pagos'}</span>
+                  </label>
+                  {pdfPagosAnalisis && (
+                    <button
+                      type="button"
+                      onClick={() => setPdfPagosAnalisis(null)}
+                      className="p-2 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+                      title="Quitar extracto de Pagos"
                     >
-                      <FolderOpen className="w-4 h-4" />
-                      <span>{isFillingExcel ? 'Autocompletando...' : '📁 Autocompletar en Excel Sindicato'}</span>
-                    </label>
-                  </>
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* BOTONES DE ACCIÓN PRINCIPALES (AUTOCOMPLETAR EXCEL CON AMBOS PDFS) */}
+            <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-center gap-3">
+              {/* Hidden Input para Cargar Plantilla de Conciliación Sindicato Excel */}
+              <input
+                type="file"
+                ref={excelFillInputRef}
+                onChange={handleExcelFillUpload}
+                accept=".xlsx,.xls"
+                className="hidden"
+                id="sindicato-excel-upload"
+              />
+
+              {hasAtLeastOnePdf ? (
+                <label
+                  htmlFor="sindicato-excel-upload"
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white shadow-xl shadow-purple-600/30 transition cursor-pointer active:scale-95 ${
+                    isFillingExcel ? 'opacity-50 pointer-events-none' : ''
+                  }`}
+                  title="Seleccionar 'Conciliación Sindicato 2026 2027.xlsx' para autocompletar ambas cuentas y descargar en 1 solo paso"
+                >
+                  <FolderOpen className="w-5 h-5 text-amber-300" />
+                  <span>
+                    {isFillingExcel
+                      ? 'Autocompletando ambas cuentas...'
+                      : pdfCobrosAnalisis && pdfPagosAnalisis
+                      ? '🚀 Autocompletar Excel con Cobros y Pagos (1 Clic)'
+                      : '📁 Autocompletar en Excel Sindicato'}
+                  </span>
+                </label>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  Sube al menos un extracto PDF arriba para habilitar el autocompletado del Excel.
+                </p>
+              )}
+
+              {currentPdfAnalisis && (
+                <button
+                  type="button"
+                  onClick={() => exportarAnalisisBancoExcel(currentPdfAnalisis)}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 transition cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Descargar Excel 4 Hojas ({activePdfTab === 'cobros' ? 'Cobros' : 'Pagos'})</span>
+                </button>
+              )}
+            </div>
+
+            {pdfError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center justify-center gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{pdfError}</span>
+              </div>
+            )}
+
+            {excelFillError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center justify-center gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{excelFillError}</span>
+              </div>
+            )}
+
+            {excelFillResult && (
+              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs space-y-1 animate-in fade-in">
+                <div className="flex items-center justify-center gap-2 font-bold text-sm text-emerald-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>¡Planilla de Conciliación Autocompletada Exitosamente!</span>
+                </div>
+                <p className="text-slate-300 text-center">
+                  Se completaron las columnas en la pestaña <strong className="text-white">"{excelFillResult.sheetUpdated}"</strong> para: <strong className="text-sky-300">{excelFillResult.cuentasActualizadas}</strong>. El archivo descargado contiene los números exactos y preserva 100% el diseño original.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* RESULTADOS DEL ANÁLISIS PDF CON SELECTOR DE CUENTA ACTIVA */}
+          {hasAtLeastOnePdf && currentPdfAnalisis && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              {/* SELECTOR DE EXTRACTO ACTIVO: COBROS VS PAGOS */}
+              <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800 w-fit">
+                {pdfCobrosAnalisis && (
+                  <button
+                    type="button"
+                    onClick={() => setActivePdfTab('cobros')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      activePdfTab === 'cobros'
+                        ? 'bg-emerald-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-300"></span>
+                    <span>Cuenta Cobros (2324)</span>
+                  </button>
+                )}
+
+                {pdfPagosAnalisis && (
+                  <button
+                    type="button"
+                    onClick={() => setActivePdfTab('pagos')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      activePdfTab === 'pagos'
+                        ? 'bg-sky-600 text-white shadow'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-sky-300"></span>
+                    <span>Cuenta Pagos (5145)</span>
+                  </button>
                 )}
               </div>
 
-              {pdfError && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center justify-center gap-2 mt-3 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{pdfError}</span>
-                </div>
-              )}
-
-              {excelFillError && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center justify-center gap-2 mt-3 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{excelFillError}</span>
-                </div>
-              )}
-
-              {excelFillResult && (
-                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs space-y-1 mt-3 animate-in fade-in">
-                  <div className="flex items-center justify-center gap-2 font-bold text-sm text-emerald-200">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>¡Planilla de Conciliación Autocompletada con Éxito!</span>
-                  </div>
-                  <p className="text-slate-300">
-                    Se rellenaron los valores en la hoja <strong className="text-white">"{excelFillResult.sheetUpdated}"</strong> para la cuenta <strong className="text-sky-300">{excelFillResult.cuentaActualizada}</strong>. El archivo descargado ya contiene los montos exactos y las fórmulas actualizadas.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* RESULTADOS DEL ANÁLISIS PDF */}
-          {pdfAnalisis && (
-            <div className="space-y-4 animate-in fade-in duration-200">
-              {/* METRICAS HEADER DEL PDF */}
+              {/* METRICAS HEADER DEL PDF SELECCIONADO */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-sm">
                   <p className="text-[11px] text-slate-400 font-medium">Cuenta Detectada</p>
                   <h4 className="text-base font-bold text-white font-mono mt-0.5 truncate">
-                    {pdfAnalisis.account}
+                    {currentPdfAnalisis.account}
                   </h4>
                   <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 inline-block mt-1">
-                    Tipo: {pdfAnalisis.tipo}
+                    Tipo: {currentPdfAnalisis.tipo}
                   </span>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-sm">
                   <p className="text-[11px] text-slate-400 font-medium">Período de Extracto</p>
                   <h4 className="text-xs font-bold text-white font-mono mt-0.5 truncate">
-                    {pdfAnalisis.periodo}
+                    {currentPdfAnalisis.periodo}
                   </h4>
                   <p className="text-[10px] text-slate-500 mt-1">
-                    {pdfAnalisis.transactions.length} transacciones ({pdfAnalisis.numPages} págs)
+                    {currentPdfAnalisis.transactions.length} transacciones ({currentPdfAnalisis.numPages} págs)
                   </p>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-sm">
                   <p className="text-[11px] text-slate-400 font-medium">Total Débitos / Salidas</p>
                   <h4 className="text-base font-bold text-rose-400 font-mono mt-0.5 truncate">
-                    {fmtMoney(pdfAnalisis.totalDebitos)}
+                    {fmtMoney(currentPdfAnalisis.totalDebitos)}
                   </h4>
                   <p className="text-[10px] text-slate-500 mt-1">Pagos y comisiones</p>
                 </div>
@@ -626,11 +818,11 @@ export default function ModuloBancos({
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-sm">
                   <p className="text-[11px] text-slate-400 font-medium">Saldo Final en Extracto</p>
                   <h4 className="text-base font-bold text-emerald-400 font-mono mt-0.5 truncate">
-                    {fmtMoney(pdfAnalisis.saldoFinal)}
+                    {fmtMoney(currentPdfAnalisis.saldoFinal)}
                   </h4>
                   <button
                     type="button"
-                    onClick={handleImportarGastosAlSistema}
+                    onClick={() => handleImportarGastosAlSistema(currentPdfAnalisis)}
                     className="text-[10px] font-bold text-sky-400 hover:text-sky-300 underline mt-1 block cursor-pointer"
                   >
                     + Importar a Movimientos
@@ -652,7 +844,7 @@ export default function ModuloBancos({
                       }`}
                     >
                       <ListOrdered className="w-3.5 h-3.5" />
-                      <span>1. Estado de Cuenta ({pdfAnalisis.transactions.length})</span>
+                      <span>1. Estado de Cuenta ({currentPdfAnalisis.transactions.length})</span>
                     </button>
 
                     <button
@@ -665,7 +857,7 @@ export default function ModuloBancos({
                       }`}
                     >
                       <Layers className="w-3.5 h-3.5" />
-                      <span>2. Totales por Detalle ({pdfAnalisis.listaTotalesDetalle.length})</span>
+                      <span>2. Totales por Detalle ({currentPdfAnalisis.listaTotalesDetalle.length})</span>
                     </button>
 
                     <button
@@ -698,7 +890,7 @@ export default function ModuloBancos({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => exportarAnalisisBancoExcel(pdfAnalisis)}
+                      onClick={() => exportarAnalisisBancoExcel(currentPdfAnalisis)}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600/30 transition cursor-pointer"
                     >
                       <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -751,7 +943,7 @@ export default function ModuloBancos({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/60 font-sans">
-                          {pdfAnalisis.transactions
+                          {currentPdfAnalisis.transactions
                             .filter((t) => {
                               if (pdfCatFilter !== 'TODAS' && t.CATEGORIA !== pdfCatFilter) return false
                               if (pdfSearchTerm) {
@@ -805,7 +997,7 @@ export default function ModuloBancos({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-sans">
-                        {pdfAnalisis.listaTotalesDetalle.map((row, i) => {
+                        {currentPdfAnalisis.listaTotalesDetalle.map((row, i) => {
                           const saldoNeto = row.creditos - row.debitos
                           return (
                             <tr key={i} className="hover:bg-slate-800/40 transition">
@@ -842,7 +1034,7 @@ export default function ModuloBancos({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-sans">
-                        {pdfAnalisis.resumenCategorias.map((row) => {
+                        {currentPdfAnalisis.resumenCategorias.map((row) => {
                           const saldoNeto = row.creditos - row.debitos
                           return (
                             <tr key={row.categoria} className="hover:bg-slate-800/40 transition">
@@ -872,7 +1064,7 @@ export default function ModuloBancos({
                 {pdfViewTab === 'detalleCat' && (
                   <div className="p-3 sm:p-4 space-y-4 max-h-[500px] overflow-y-auto">
                     {[...ORDEN_CATEGORIAS, 'NO CATEGORIZADAS'].map((cat) => {
-                      const subObj = pdfAnalisis.detallePorCategoria[cat] || {}
+                      const subObj = currentPdfAnalisis.detallePorCategoria[cat] || {}
                       const items = Object.values(subObj).sort((a, b) => (b.creditos - b.debitos) - (a.creditos - a.debitos))
                       if (items.length === 0) return null
 
