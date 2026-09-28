@@ -1524,40 +1524,51 @@ export default function App() {
     ].includes(c)
   }, [])
 
+  // Helper de normalización para coincidencia robusta
+  const normalizeEntityName = useCallback((s) => {
+    return (s || '')
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }, [])
+
   // ================= CUENTA CORRIENTE ENGINE =================
   const entidadesCC = useMemo(() => {
     const map = {}
+    const normKeyMap = {} // normalizedName -> original key in map
 
-    // Init from standard maestros (sorted alphabetically)
-    sortAlphabetical(maestros.proveedores || []).forEach((p) => {
-      map[p] = { nombre: p, tipo: 'PROVEEDOR', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
-    })
-    sortAlphabetical(maestros.medicos || []).forEach((m) => {
-      map[m] = { nombre: m, tipo: 'MÉDICO', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
-    })
-    sortAlphabetical(maestros.empleados || []).forEach((e) => {
-      map[e] = { nombre: e, tipo: 'EMPLEADOS', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
-    })
+    const registerEntity = (name, tipo) => {
+      if (!name || name.startsWith('__')) return
+      if (!map[name]) {
+        map[name] = {
+          nombre: name,
+          tipo: tipo,
+          totalDebito: 0,
+          totalCredito: 0,
+          movimientosCount: 0,
+          pendientesCount: 0,
+          montoPendiente: 0
+        }
+        const n = normalizeEntityName(name)
+        if (n && !normKeyMap[n]) {
+          normKeyMap[n] = name
+        }
+      }
+    }
 
-    // Init custom catalogs & custom entity tables only (excluyendo rubros, impuestos, organismos, etc.)
+    // 1. Init standard maestros
+    sortAlphabetical(maestros.proveedores || []).forEach((p) => registerEntity(p, 'PROVEEDOR'))
+    sortAlphabetical(maestros.medicos || []).forEach((m) => registerEntity(m, 'MÉDICO'))
+    sortAlphabetical(maestros.empleados || []).forEach((e) => registerEntity(e, 'EMPLEADOS'))
+
+    // 2. Init custom catalogs & entity tables
     Object.keys(maestros).forEach((k) => {
       if (['proveedores', 'medicos', 'empleados'].includes(k.toLowerCase())) return
       if (isNonEntityCategory(k) || isNonEntityCategory(customCatalogLabels[k])) return
       const customType = (customCatalogLabels[k] || catalogLabels[k] || k.replace(/_/g, ' ')).toUpperCase()
-      sortAlphabetical(maestros[k] || []).forEach((item) => {
-        if (!item || item.startsWith('__')) return
-        if (!map[item]) {
-          map[item] = {
-            nombre: item,
-            tipo: customType,
-            totalDebito: 0,
-            totalCredito: 0,
-            movimientosCount: 0,
-            pendientesCount: 0,
-            montoPendiente: 0
-          }
-        }
-      })
+      sortAlphabetical(maestros[k] || []).forEach((item) => registerEntity(item, customType))
     })
 
     const excludedEntities = new Set([
@@ -1577,38 +1588,38 @@ export default function App() {
       if (isNonEntityCategory(m.rubro)) return
       if (excludedEntities.has(entName)) return
 
-      if (!map[entName]) {
-        map[entName] = {
-          nombre: entName,
-          tipo: m.rubro || 'PROVEEDOR',
-          totalDebito: 0,
-          totalCredito: 0,
-          movimientosCount: 0,
-          pendientesCount: 0,
-          montoPendiente: 0
+      // Buscar clave existente o coincidencia normalizada (ej: con/sin comas o mayúsculas)
+      let targetKey = entName
+      if (!map[targetKey]) {
+        const n = normalizeEntityName(entName)
+        if (normKeyMap[n] && map[normKeyMap[n]]) {
+          targetKey = normKeyMap[n]
+        } else {
+          registerEntity(entName, m.rubro || 'PROVEEDOR')
+          targetKey = entName
         }
       }
 
-      map[entName].movimientosCount += 1
+      map[targetKey].movimientosCount += 1
 
       if (m.rubro === 'MÉDICO') {
         const debito = Number(m.netoPagadoMed || m.pagosMed || 0)
         const credito = m.fechaPago ? debito : 0
-        map[entName].totalDebito += debito
-        map[entName].totalCredito += credito
+        map[targetKey].totalDebito += debito
+        map[targetKey].totalCredito += credito
         if (!m.fechaPago && debito > 0) {
-          map[entName].pendientesCount += 1
-          map[entName].montoPendiente += debito
+          map[targetKey].pendientesCount += 1
+          map[targetKey].montoPendiente += debito
         }
       } else {
         const monto = Number(m.pagosS || 0)
         const debito = monto
         const credito = m.fechaPago ? monto : 0
-        map[entName].totalDebito += debito
-        map[entName].totalCredito += credito
+        map[targetKey].totalDebito += debito
+        map[targetKey].totalCredito += credito
         if (!m.fechaPago && debito > 0) {
-          map[entName].pendientesCount += 1
-          map[entName].montoPendiente += debito
+          map[targetKey].pendientesCount += 1
+          map[targetKey].montoPendiente += debito
         }
       }
     })
@@ -1619,7 +1630,7 @@ export default function App() {
         saldo: ent.totalDebito - ent.totalCredito
       }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
-  }, [movimientos, maestros, customCatalogLabels, catalogLabels, isNonEntityCategory])
+  }, [movimientos, maestros, customCatalogLabels, catalogLabels, isNonEntityCategory, normalizeEntityName])
 
   // Filtered entities list with strict alphabetical order and saldo/pending status filter
   const filteredEntidades = useMemo(() => {
@@ -1656,9 +1667,12 @@ export default function App() {
   const extractoCuenta = useMemo(() => {
     if (!selectedEntity) return { movimientos: [], totalDebito: 0, totalCredito: 0, saldoFinal: 0, totalPendientes: 0, montoPendiente: 0 }
 
+    const selNorm = normalizeEntityName(selectedEntity)
     const entMovs = movimientos
       .filter((m) => {
-        if (m.empresaConcepto !== selectedEntity) return false
+        if (m.empresaConcepto !== selectedEntity && normalizeEntityName(m.empresaConcepto) !== selNorm) {
+          return false
+        }
 
         if (ccPeriodFilter !== 'TODOS') {
           if (m.mesPeriodo && m.mesPeriodo.trim() !== ccPeriodFilter.trim()) {
