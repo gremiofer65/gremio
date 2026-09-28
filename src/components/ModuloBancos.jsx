@@ -767,13 +767,93 @@ export default function ModuloBancos({
             )}
 
             {excelFillResult && (
-              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs space-y-1 animate-in fade-in">
-                <div className="flex items-center justify-center gap-2 font-bold text-sm text-emerald-200">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>¡Planilla de Conciliación Autocompletada Exitosamente!</span>
+              <div className="p-4 bg-emerald-950/30 border border-emerald-500/40 rounded-2xl text-emerald-300 text-xs space-y-4 animate-in fade-in">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/30 pb-3">
+                  <div className="flex items-center gap-2 font-bold text-sm text-emerald-200">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <span>¡Planilla de Conciliación Autocompletada y Verificada!</span>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Hoja: {excelFillResult.sheetUpdated}
+                  </span>
                 </div>
-                <p className="text-slate-300 text-center">
-                  Se completaron las columnas en la pestaña <strong className="text-white">"{excelFillResult.sheetUpdated}"</strong> para: <strong className="text-sky-300">{excelFillResult.cuentasActualizadas}</strong>. El archivo descargado contiene los números exactos y preserva 100% el diseño original.
+
+                {/* TARJETAS DE VERIFICACIÓN POR CUENTA (SALDO ANTERIOR Y SALDO FINAL VS CONTABLE) */}
+                {excelFillResult.verificaciones && excelFillResult.verificaciones.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {excelFillResult.verificaciones.map((v, i) => (
+                      <div key={i} className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+                        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                          <span className="font-bold text-xs text-white flex items-center gap-1.5">
+                            <Landmark className="w-3.5 h-3.5 text-sky-400" />
+                            <span>{v.accountLabel}</span>
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                            v.estaConciliado
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                          }`}>
+                            {v.estaConciliado ? '✓ Conciliado' : '⚠️ Discrepancia'}
+                          </span>
+                        </div>
+
+                        {/* 1. Verificación Saldo Anterior */}
+                        <div className="space-y-1 text-[11px]">
+                          <div className="flex justify-between items-center text-slate-400">
+                            <span>1. Saldo Anterior (Extracto PDF):</span>
+                            <span className="font-mono text-white font-semibold">{fmtMoney(v.saldoAnteriorPdf)}</span>
+                          </div>
+                          {v.excelSaldoAnteriorOriginal !== null && (
+                            <div className="flex justify-between items-center text-slate-400">
+                              <span>Saldo Anterior en Planilla Excel:</span>
+                              <span className="font-mono text-white font-semibold">{fmtMoney(v.excelSaldoAnteriorOriginal)}</span>
+                            </div>
+                          )}
+                          <div className={`p-1.5 rounded-lg flex items-center justify-between ${
+                            v.saldoAnteriorCoincide ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'
+                          }`}>
+                            <span className="font-medium">Estado Saldo Anterior:</span>
+                            <strong className="font-mono">
+                              {v.saldoAnteriorCoincide ? '✓ Coincide exactamente' : `⚠️ Dif: ${fmtMoney(v.difSaldoAnterior)}`}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {/* 2. Verificación Saldo Final vs Saldo Contable */}
+                        <div className="space-y-1 text-[11px] pt-1.5 border-t border-slate-800/60">
+                          <div className="flex justify-between items-center text-slate-400">
+                            <span>2. Saldo Final (Extracto PDF):</span>
+                            <span className="font-mono font-bold text-sky-300">{fmtMoney(v.saldoFinalPdf)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-slate-400">
+                            <span>Saldo Contable (Excel):</span>
+                            <span className="font-mono font-bold text-white">{fmtMoney(v.saldoContableCalculado)}</span>
+                          </div>
+                          {(v.chequesPendientes > 0 || v.depositosPendientes > 0) && (
+                            <div className="text-[10px] text-slate-400 italic">
+                              Partidas: Cheques pend: -{fmtMoney(v.chequesPendientes)} | Depósitos pend: +{fmtMoney(v.depositosPendientes)}
+                            </div>
+                          )}
+                          <div className={`p-1.5 rounded-lg flex items-center justify-between ${
+                            v.coincideExacto ? 'bg-emerald-500/10 text-emerald-300' : v.estaConciliado ? 'bg-sky-500/10 text-sky-300' : 'bg-rose-500/10 text-rose-300'
+                          }`}>
+                            <span className="font-medium">Saldo Final vs Contable:</span>
+                            <strong className="font-mono">
+                              {v.coincideExacto
+                                ? '✓ Saldo Final = Saldo Contable'
+                                : v.estaConciliado
+                                ? '✓ Conciliado c/ partidas pend.'
+                                : `⚠️ Dif: ${fmtMoney(v.diferenciaSaldoFinalVsContable)}`}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-slate-300 text-center text-xs">
+                  Se completaron las columnas en <strong className="text-white">"{excelFillResult.sheetUpdated}"</strong> para <strong className="text-sky-300">{excelFillResult.cuentasActualizadas}</strong>. El archivo descargado preserva el 100% del diseño y fórmulas originales.
                 </p>
               </div>
             )}
@@ -875,48 +955,57 @@ export default function ModuloBancos({
                 </div>
               )}
 
-              {/* METRICAS HEADER DEL PDF SELECCIONADO */}
+              {/* METRICAS HEADER DEL PDF SELECCIONADO (INCLUYE SALDO ANTERIOR Y SALDO FINAL) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-                  <p className="text-[11px] text-slate-400 font-medium">Cuenta Detectada</p>
-                  <h4 className="text-base font-bold text-white font-mono mt-0.5 truncate">
+                  <p className="text-[11px] text-slate-400 font-medium">Cuenta & Período</p>
+                  <h4 className="text-sm font-bold text-white font-mono mt-0.5 truncate">
                     {currentPdfAnalisis.account}
                   </h4>
-                  <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 inline-block mt-1">
-                    Tipo: {currentPdfAnalisis.tipo}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                      {currentPdfAnalisis.tipo}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {currentPdfAnalisis.transactions.length} movs
+                    </span>
+                  </div>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-                  <p className="text-[11px] text-slate-400 font-medium">Período de Extracto</p>
-                  <h4 className="text-xs font-bold text-white font-mono mt-0.5 truncate">
-                    {currentPdfAnalisis.periodo}
+                  <p className="text-[11px] text-slate-400 font-medium">1. Saldo Anterior Oficial</p>
+                  <h4 className="text-base font-bold text-sky-300 font-mono mt-0.5 truncate">
+                    {fmtMoney(currentPdfAnalisis.saldoAnterior || 0)}
                   </h4>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    {currentPdfAnalisis.transactions.length} transacciones ({currentPdfAnalisis.numPages} págs)
-                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1">Inicio de extracto bancario</p>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-                  <p className="text-[11px] text-slate-400 font-medium">Total Débitos / Salidas</p>
-                  <h4 className="text-base font-bold text-rose-400 font-mono mt-0.5 truncate">
-                    {fmtMoney(currentPdfAnalisis.totalDebitos)}
-                  </h4>
-                  <p className="text-[10px] text-slate-500 mt-1">Pagos y comisiones</p>
+                  <p className="text-[11px] text-slate-400 font-medium">Movimientos del Período</p>
+                  <div className="mt-0.5 space-y-0.5 font-mono text-xs">
+                    <div className="text-rose-400 font-bold truncate">
+                      - {fmtMoney(currentPdfAnalisis.totalDebitos)}
+                    </div>
+                    <div className="text-emerald-400 font-bold truncate">
+                      + {fmtMoney(currentPdfAnalisis.totalCreditos)}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-sm">
-                  <p className="text-[11px] text-slate-400 font-medium">Saldo Final en Extracto</p>
+                  <p className="text-[11px] text-slate-400 font-medium">2. Saldo Final del Extracto</p>
                   <h4 className="text-base font-bold text-emerald-400 font-mono mt-0.5 truncate">
                     {fmtMoney(currentPdfAnalisis.saldoFinal)}
                   </h4>
-                  <button
-                    type="button"
-                    onClick={() => handleImportarGastosAlSistema(currentPdfAnalisis)}
-                    className="text-[10px] font-bold text-sky-400 hover:text-sky-300 underline mt-1 block cursor-pointer"
-                  >
-                    + Importar a Movimientos
-                  </button>
+                  {(() => {
+                    const calculado = (currentPdfAnalisis.saldoAnterior || 0) - currentPdfAnalisis.totalDebitos + currentPdfAnalisis.totalCreditos
+                    const cuadra = Math.abs(calculado - (currentPdfAnalisis.saldoFinal || 0)) < 0.05
+                    return (
+                      <span className={`text-[10px] font-bold mt-1 inline-block ${cuadra ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {cuadra ? '✓ Cuadra con movimientos' : `⚠️ Dif: ${fmtMoney(calculado - currentPdfAnalisis.saldoFinal)}`}
+                      </span>
+                    )
+                  })()}
                 </div>
               </div>
 

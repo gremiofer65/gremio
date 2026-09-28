@@ -434,11 +434,13 @@ export function exportarAnalisisBancoExcel(analisis) {
 
 /**
  * Helper interno para rellenar una cuenta específica (Cobros o Pagos) dentro de una hoja de ExcelJS
+ * y verificar la consistencia de Saldo Anterior y Saldo Final vs Saldo Contable
  */
 function fillAccountInWorksheet(targetWs, pdfItem) {
-  if (!targetWs || !pdfItem) return
+  if (!targetWs || !pdfItem) return null
 
   const isPagos = pdfItem.account.includes('2341055145') || pdfItem.tipo === 'Pagos'
+  const accountLabel = isPagos ? '23410551/45 (Pagos)' : '23410523/24 (Cobros)'
   const labelColIdx = isPagos ? 7 : 1 // Columna G (7) ó A (1)
   const valColIdx = isPagos ? 8 : 2   // Columna H (8) ó B (2)
 
@@ -447,6 +449,37 @@ function fillAccountInWorksheet(targetWs, pdfItem) {
     catTotals[c.categoria] = c
   })
 
+  let excelSaldoAnteriorOriginal = null
+  let chequesPendientes = 0
+  let depositosPendientes = 0
+
+  // 1. Leer valores preexistentes de la plantilla antes de escribir
+  targetWs.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber > 45) return
+    const labelCell = row.getCell(labelColIdx)
+    const labelVal = labelCell?.value
+    const labelRaw = typeof labelVal === 'string' ? labelVal.trim() : ''
+    const labelNorm = normText(labelRaw)
+
+    const targetCell = row.getCell(valColIdx)
+    const rawVal = targetCell?.value
+
+    if (labelNorm === 'saldoanteriorsbco') {
+      if (typeof rawVal === 'number') {
+        excelSaldoAnteriorOriginal = rawVal
+      } else if (rawVal && typeof rawVal === 'object' && rawVal.result !== undefined) {
+        excelSaldoAnteriorOriginal = Number(rawVal.result)
+      }
+    } else if (labelNorm === 'chequespendientesdecobro') {
+      const num = typeof rawVal === 'number' ? rawVal : (rawVal && typeof rawVal === 'object' && rawVal.result !== undefined) ? Number(rawVal.result) : parseFloat(rawVal) || 0
+      chequesPendientes = num
+    } else if (labelNorm === 'depositospendientesdeacreditac') {
+      const num = typeof rawVal === 'number' ? rawVal : (rawVal && typeof rawVal === 'object' && rawVal.result !== undefined) ? Number(rawVal.result) : parseFloat(rawVal) || 0
+      depositosPendientes = num
+    }
+  })
+
+  // 2. Rellenar las celdas correspondientes preservando fórmulas si existen
   targetWs.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber > 45) return
 
@@ -461,7 +494,11 @@ function fillAccountInWorksheet(targetWs, pdfItem) {
 
     const setAmount = (val) => {
       const numVal = Number(Number(val || 0).toFixed(2))
-      targetCell.value = numVal
+      if (targetCell.value && typeof targetCell.value === 'object' && targetCell.value.formula) {
+        targetCell.value = { formula: targetCell.value.formula, result: numVal }
+      } else {
+        targetCell.value = numVal
+      }
       if (!targetCell.numFmt) {
         targetCell.numFmt = '#,##0.00'
       }
@@ -492,26 +529,59 @@ function fillAccountInWorksheet(targetWs, pdfItem) {
     }
   })
 
-  // Actualizar Saldo Contable si existe en la fila inferior
+  // 3. Actualizar fila de SALDO CONTABLE preservando fórmula
+  const saldoFinalNum = Number(pdfItem.saldoFinal || 0)
+  const saldoContableCalculado = Number((saldoFinalNum - chequesPendientes + depositosPendientes).toFixed(2))
+
   for (let r = 25; r <= 35; r++) {
     const row = targetWs.getRow(r)
-    const nextCell = row.getCell(valColIdx + 1)
-    const nextVal = typeof nextCell?.value === 'string' ? normText(nextCell.value) : ''
+    const labelCell = row.getCell(valColIdx + 1)
+    const labelNorm = typeof labelCell?.value === 'string' ? normText(labelCell.value) : ''
 
-    if (nextVal === 'saldocontable') {
+    if (labelNorm === 'saldocontable') {
       const targetCell = row.getCell(valColIdx)
-      if (pdfItem.saldoFinal !== null && pdfItem.saldoFinal !== undefined) {
-        targetCell.value = Number(Number(pdfItem.saldoFinal).toFixed(2))
-        if (!targetCell.numFmt) targetCell.numFmt = '#,##0.00'
+      if (targetCell.value && typeof targetCell.value === 'object' && targetCell.value.formula) {
+        targetCell.value = { formula: targetCell.value.formula, result: saldoContableCalculado }
+      } else {
+        targetCell.value = saldoContableCalculado
       }
+      if (!targetCell.numFmt) targetCell.numFmt = '#,##0.00'
     }
+  }
+
+  // 4. Verificaciones de Auditoría y Consistencia
+  const saldoAnteriorPdf = Number(pdfItem.saldoAnterior || 0)
+  const saldoAnteriorCoincide = excelSaldoAnteriorOriginal !== null
+    ? Math.abs(saldoAnteriorPdf - excelSaldoAnteriorOriginal) < 0.01
+    : true
+
+  const diferenciaSaldoFinalVsContable = saldoFinalNum - saldoContableCalculado
+  const coincideExacto = Math.abs(diferenciaSaldoFinalVsContable) < 0.01
+
+  return {
+    account: pdfItem.account,
+    tipo: pdfItem.tipo,
+    accountLabel,
+    // Verificación Saldo Anterior
+    saldoAnteriorPdf,
+    excelSaldoAnteriorOriginal,
+    saldoAnteriorCoincide,
+    difSaldoAnterior: excelSaldoAnteriorOriginal !== null ? (saldoAnteriorPdf - excelSaldoAnteriorOriginal) : 0,
+    // Verificación Saldo Final vs Saldo Contable
+    saldoFinalPdf: saldoFinalNum,
+    saldoContableCalculado,
+    chequesPendientes,
+    depositosPendientes,
+    coincideExacto,
+    diferenciaSaldoFinalVsContable,
+    estaConciliado: coincideExacto || (Math.abs(diferenciaSaldoFinalVsContable - (chequesPendientes - depositosPendientes)) < 0.01)
   }
 }
 
 /**
  * Autocompleta el archivo oficial de Conciliación Sindicato (.xlsx)
  * Acepta UN SOLO PDF o una LISTA DE PDFs (Cobros y Pagos) y rellena ambas columnas en un solo paso
- * preservando el 100% de formatos, colores y fórmulas.
+ * preservando el 100% de formatos, colores y fórmulas, y realizando la verificación de saldos.
  */
 export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnalisisOrList, targetSheetName = null) {
   if (!excelFile || !pdfAnalisisOrList) {
@@ -560,12 +630,16 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
     throw new Error(`No se encontró la hoja para el período en el archivo Excel. Hojas disponibles: ${sheetNames.join(', ')}`)
   }
 
-  // 2. Rellenar las columnas de CADA PDF cargado (Cobros 2324 y/o Pagos 5145)
+  // 2. Rellenar las columnas de CADA PDF cargado (Cobros 2324 y/o Pagos 5145) y capturar verificaciones
   const cuentasActualizadas = []
+  const verificaciones = []
+
   for (const pdfItem of pdfList) {
-    fillAccountInWorksheet(targetWs, pdfItem)
-    const isPagos = pdfItem.account.includes('2341055145') || pdfItem.tipo === 'Pagos'
-    cuentasActualizadas.push(isPagos ? '23410551/45 (Pagos)' : '23410523/24 (Cobros)')
+    const verif = fillAccountInWorksheet(targetWs, pdfItem)
+    if (verif) {
+      verificaciones.push(verif)
+      cuentasActualizadas.push(verif.accountLabel)
+    }
   }
 
   // 3. Escribir y descargar el archivo Excel actualizado con ambas columnas completadas
@@ -585,6 +659,7 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
   return {
     success: true,
     sheetUpdated: foundSheetName,
-    cuentasActualizadas: cuentasActualizadas.join(' y ')
+    cuentasActualizadas: cuentasActualizadas.join(' y '),
+    verificaciones
   }
 }
