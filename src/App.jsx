@@ -1508,6 +1508,22 @@ export default function App() {
       })
   }, [movimientos, selectedMes, searchTerm, selectedRubro, selectedSede, diarioSortOrder])
 
+  // Helper para determinar si una categoría o rubro NO representa una cuenta corriente de entidad
+  const isNonEntityCategory = useCallback((catName) => {
+    if (!catName) return false
+    const c = String(catName).toLowerCase().trim().replace(/[\s_]+/g, '')
+    return [
+      'impuestos', 'impuesto', 'tax', 'taxes',
+      'rubros', 'rubro',
+      'conceptosgastos', 'conceptosgasto', 'conceptos', 'concepto',
+      'conceptoshonorarios', 'honorariosconceptos',
+      'sedes', 'sede',
+      'ingresostipos', 'ingresostipo', 'ingresos', 'ingreso',
+      'organismos', 'organismo',
+      'seguros', 'seguro'
+    ].includes(c)
+  }, [])
+
   // ================= CUENTA CORRIENTE ENGINE =================
   const entidadesCC = useMemo(() => {
     const map = {}
@@ -1523,9 +1539,10 @@ export default function App() {
       map[e] = { nombre: e, tipo: 'EMPLEADOS', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
     })
 
-    // Init custom catalogs & custom entity tables only
+    // Init custom catalogs & custom entity tables only (excluyendo rubros, impuestos, organismos, etc.)
     Object.keys(maestros).forEach((k) => {
-      if (['proveedores', 'medicos', 'empleados', 'impuestos', 'conceptosGastos', 'conceptosHonorarios', 'sedes', 'ingresosTipos'].includes(k)) return
+      if (['proveedores', 'medicos', 'empleados'].includes(k.toLowerCase())) return
+      if (isNonEntityCategory(k) || isNonEntityCategory(customCatalogLabels[k])) return
       const customType = (customCatalogLabels[k] || catalogLabels[k] || k.replace(/_/g, ' ')).toUpperCase()
       sortAlphabetical(maestros[k] || []).forEach((item) => {
         if (!item || item.startsWith('__')) return
@@ -1543,9 +1560,22 @@ export default function App() {
       })
     })
 
+    const excludedEntities = new Set([
+      ...(maestros.impuestos || []),
+      ...(maestros.conceptosGastos || []),
+      ...(maestros.conceptosHonorarios || []),
+      ...(maestros.sedes || []),
+      ...(maestros.ingresosTipos || []),
+      ...(maestros.rubros || [])
+    ])
+
     movimientos.forEach((m) => {
       const entName = m.empresaConcepto
       if (!entName) return
+
+      // Excluir impuestos, seguros, ingresos generales y conceptos no asociados a cuentas corrientes
+      if (isNonEntityCategory(m.rubro)) return
+      if (excludedEntities.has(entName)) return
 
       if (!map[entName]) {
         map[entName] = {
@@ -1570,14 +1600,6 @@ export default function App() {
           map[entName].pendientesCount += 1
           map[entName].montoPendiente += debito
         }
-      } else if (m.rubro === 'INGRESOS') {
-        const monto = Number(m.total || 0)
-        map[entName].totalDebito += monto
-        map[entName].totalCredito += m.fechaPago ? monto : 0
-        if (!m.fechaPago && monto > 0) {
-          map[entName].pendientesCount += 1
-          map[entName].montoPendiente += monto
-        }
       } else {
         const monto = Number(m.pagosS || 0)
         const debito = monto
@@ -1597,7 +1619,7 @@ export default function App() {
         saldo: ent.totalDebito - ent.totalCredito
       }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
-  }, [movimientos, maestros, customCatalogLabels, catalogLabels])
+  }, [movimientos, maestros, customCatalogLabels, catalogLabels, isNonEntityCategory])
 
   // Filtered entities list with strict alphabetical order and saldo/pending status filter
   const filteredEntidades = useMemo(() => {
@@ -3770,7 +3792,11 @@ export default function App() {
                       Personal
                     </button>
                     {Object.keys(maestros)
-                      .filter((k) => !['proveedores', 'medicos', 'empleados', 'conceptosGastos', 'conceptosHonorarios', 'sedes', 'ingresosTipos'].includes(k))
+                      .filter((k) => {
+                        if (['proveedores', 'medicos', 'empleados'].includes(k.toLowerCase())) return false
+                        if (isNonEntityCategory(k) || isNonEntityCategory(customCatalogLabels[k])) return false
+                        return true
+                      })
                       .map((k) => {
                         const label = customCatalogLabels[k] || catalogLabels[k] || k.replace(/_/g, ' ')
                         const typeVal = label.toUpperCase()
