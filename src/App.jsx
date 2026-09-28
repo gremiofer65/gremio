@@ -703,6 +703,20 @@ export default function App() {
     } catch (e) {}
   }, [maestrosCuit])
 
+  const [customCatalogLabels, setCustomCatalogLabels] = useState(() => {
+    try {
+      const saved = localStorage.getItem('custom_catalog_labels_v1')
+      if (saved) return JSON.parse(saved)
+    } catch (e) {}
+    return {}
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('custom_catalog_labels_v1', JSON.stringify(customCatalogLabels))
+    } catch (e) {}
+  }, [customCatalogLabels])
+
   const [meses, setMeses] = useState(() => {
     const defaultMeses = [
       'ENERO 26',
@@ -732,16 +746,21 @@ export default function App() {
         setMeses(sorted)
       }
 
-      // 2. Cargar Tablas Maestras
+      // 2. Cargar Tablas Maestras (incluyendo categorías personalizadas persistidas)
       const { data: dbMaestros } = await supabase.from('maestros').select('*')
       if (dbMaestros && dbMaestros.length > 0) {
         const grouped = {}
         const cuitMap = {}
+        const dynamicLabels = {}
         dbMaestros.forEach((item) => {
           if (!grouped[item.categoria]) grouped[item.categoria] = []
-          grouped[item.categoria].push(item.nombre)
-          if (item.cuit) {
-            cuitMap[item.nombre] = item.cuit
+          if (item.nombre === '__CATEGORY_HEADER__') {
+            if (item.cuit) dynamicLabels[item.categoria] = item.cuit
+          } else if (item.nombre) {
+            grouped[item.categoria].push(item.nombre)
+            if (item.cuit) {
+              cuitMap[item.nombre] = item.cuit
+            }
           }
         })
         setMaestros((prev) => {
@@ -754,6 +773,9 @@ export default function App() {
         })
         if (Object.keys(cuitMap).length > 0) {
           setMaestrosCuit((prev) => ({ ...prev, ...cuitMap }))
+        }
+        if (Object.keys(dynamicLabels).length > 0) {
+          setCustomCatalogLabels((prev) => ({ ...prev, ...dynamicLabels }))
         }
       }
 
@@ -894,8 +916,8 @@ export default function App() {
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
 
-  // Catalog tab labels dictionary
-  const catalogLabels = {
+  // Catalog tab labels dictionary (estándar + personalizadas)
+  const catalogLabels = useMemo(() => ({
     proveedores: 'Proveedores y Empresas',
     medicos: 'Médicos y Profesionales',
     conceptosGastos: 'Conceptos y Gastos',
@@ -903,8 +925,59 @@ export default function App() {
     ingresosTipos: 'Conceptos de Ingresos',
     empleados: 'Personal y Empleados',
     sedes: 'Sedes y Ubicaciones',
-    impuestos: 'Impuestos y Organismos'
-  }
+    impuestos: 'Impuestos y Organismos',
+    ...customCatalogLabels
+  }), [customCatalogLabels])
+
+  // Rubros disponibles dinámicos (estándar + catálogos maestros personalizados + rubros existentes)
+  const availableRubros = useMemo(() => {
+    const baseRubros = ['PROVEEDOR', 'EMPLEADOS', 'IMPUESTO', 'SEGUROS']
+    const customRubros = Object.keys(maestros)
+      .filter((k) => !['medicos', 'ingresosTipos', 'conceptosHonorarios'].includes(k))
+      .map((k) => {
+        if (k === 'proveedores') return 'PROVEEDOR'
+        if (k === 'empleados') return 'EMPLEADOS'
+        if (k === 'impuestos') return 'IMPUESTO'
+        if (k === 'conceptosGastos') return 'CONCEPTOS GASTOS'
+        if (k === 'sedes') return 'SEDES'
+        return customCatalogLabels[k] ? customCatalogLabels[k].toUpperCase() : k.replace(/_/g, ' ').toUpperCase()
+      })
+    const fromMovs = (movimientos || []).map((m) => m.rubro).filter((r) => r && !['MÉDICO', 'INGRESOS'].includes(r))
+    return Array.from(new Set([...baseRubros, ...customRubros, ...fromMovs])).sort((a, b) => a.localeCompare(b, 'es'))
+  }, [maestros, customCatalogLabels, movimientos])
+
+  // Obtener lista de entidades pertenecientes a un rubro
+  const getEntityListForRubro = useCallback((rubro) => {
+    if (!rubro) return maestros.proveedores || []
+    const rUpper = String(rubro).toUpperCase().trim()
+
+    if (rUpper === 'EMPLEADOS') return maestros.empleados || []
+    if (rUpper === 'IMPUESTO' || rUpper === 'SEGUROS') return maestros.impuestos || []
+    if (rUpper === 'MÉDICO' || rUpper === 'MEDICO') return maestros.medicos || []
+    if (rUpper === 'PROVEEDOR') return maestros.proveedores || []
+    if (rUpper === 'CONCEPTOS GASTOS' || rUpper === 'CONCEPTOSGASTOS') return maestros.conceptosGastos || []
+    if (rUpper === 'SEDES') return maestros.sedes || []
+
+    // Buscar coincidencia directa
+    const directKey = rubro.replace(/\s+/g, '_')
+    if (maestros[directKey] && maestros[directKey].length > 0) return maestros[directKey]
+    if (maestros[rubro] && maestros[rubro].length > 0) return maestros[rubro]
+
+    // Buscar por etiqueta personalizada
+    const matchedKey = Object.keys(maestros).find((k) => {
+      const label = (customCatalogLabels[k] || catalogLabels[k] || '').toUpperCase()
+      return label === rUpper || k.toUpperCase() === rUpper
+    })
+
+    if (matchedKey && maestros[matchedKey] && maestros[matchedKey].length > 0) {
+      return maestros[matchedKey]
+    }
+
+    if (maestros[directKey]) return maestros[directKey]
+    if (matchedKey) return maestros[matchedKey]
+
+    return maestros.proveedores || []
+  }, [maestros, customCatalogLabels, catalogLabels])
 
   // Elementos a mostrar en Tablas Maestras (Búsqueda en TODAS las tablas o en la activa)
   const displayedCatalogItems = useMemo(() => {
@@ -981,7 +1054,7 @@ export default function App() {
     }
   }
 
-  const handleCreateCategory = (e) => {
+  const handleCreateCategory = async (e) => {
     e.preventDefault()
     const trimmed = newCategoryName.trim()
     if (!trimmed) return
@@ -997,9 +1070,57 @@ export default function App() {
       ...prev,
       [key]: []
     }))
+    setCustomCatalogLabels((prev) => ({
+      ...prev,
+      [key]: trimmed
+    }))
     setActiveCatalogTab(key)
     setNewCategoryName('')
     setIsNewCategoryModalOpen(false)
+
+    // Persistir categoría permanentemente en Supabase
+    try {
+      await supabase.from('maestros').upsert([
+        {
+          categoria: key,
+          nombre: '__CATEGORY_HEADER__',
+          cuit: trimmed,
+          activo: true
+        }
+      ], { onConflict: 'categoria,nombre' })
+    } catch (err) {
+      console.error('Error guardando categoría en Supabase:', err)
+    }
+  }
+
+  const handleDeleteCategory = async (catalogKey) => {
+    const isStandard = ['proveedores', 'medicos', 'empleados', 'conceptosGastos', 'conceptosHonorarios', 'ingresosTipos', 'sedes', 'impuestos'].includes(catalogKey)
+    if (isStandard) {
+      alert('Las tablas maestras principales del sistema no pueden eliminarse.')
+      return
+    }
+    const label = catalogLabels[catalogKey] || catalogKey
+    if (!window.confirm(`¿Estás seguro de ELIMINAR la tabla/catálogo completo "${label}" y todos sus registros?`)) {
+      return
+    }
+
+    setMaestros((prev) => {
+      const copy = { ...prev }
+      delete copy[catalogKey]
+      return copy
+    })
+    setCustomCatalogLabels((prev) => {
+      const copy = { ...prev }
+      delete copy[catalogKey]
+      return copy
+    })
+    setActiveCatalogTab('proveedores')
+
+    try {
+      await supabase.from('maestros').delete().eq('categoria', catalogKey)
+    } catch (err) {
+      console.error('Error eliminando categoría en Supabase:', err)
+    }
   }
 
   const handleStartEdit = (catalogKey, item) => {
@@ -4299,9 +4420,13 @@ export default function App() {
                       <option value="PROVEEDOR">PROVEEDOR</option>
                       <option value="MÉDICO">MÉDICO</option>
                       <option value="INGRESOS">INGRESOS</option>
-                      <option value="EMPLEADOS">EMPLEADOS</option>
-                      <option value="IMPUESTO">IMPUESTO</option>
-                      <option value="SEGUROS">SEGUROS</option>
+                      {availableRubros
+                        .filter((r) => !['PROVEEDOR', 'MÉDICO', 'INGRESOS'].includes(r))
+                        .map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
                     </select>
                   </div>
 
@@ -5059,11 +5184,24 @@ export default function App() {
                       </button>
                     )}
                   </div>
-                  <span className="text-slate-400 font-mono">
-                    {catalogSearch.trim() !== ''
-                      ? `${displayedCatalogItems.length} coincidencias encontradas`
-                      : `Total: ${maestros[activeCatalogTab]?.length || 0} registros`}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    {!['proveedores', 'medicos', 'empleados', 'conceptosGastos', 'conceptosHonorarios', 'ingresosTipos', 'sedes', 'impuestos'].includes(activeCatalogTab) && catalogSearch.trim() === '' && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(activeCatalogTab)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-600/20 text-rose-300 hover:bg-rose-600 hover:text-white border border-rose-500/30 transition cursor-pointer"
+                        title="Eliminar esta tabla / catálogo personalizado"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Eliminar Tabla</span>
+                      </button>
+                    )}
+                    <span className="text-slate-400 font-mono">
+                      {catalogSearch.trim() !== ''
+                        ? `${displayedCatalogItems.length} coincidencias encontradas`
+                        : `Total: ${maestros[activeCatalogTab]?.length || 0} registros`}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="divide-y divide-slate-800/60 max-h-[520px] overflow-y-auto">
@@ -5816,10 +5954,11 @@ export default function App() {
                         }}
                         className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-medium cursor-pointer"
                       >
-                        <option value="PROVEEDOR">PROVEEDOR</option>
-                        <option value="EMPLEADOS">EMPLEADOS</option>
-                        <option value="IMPUESTO">IMPUESTO</option>
-                        <option value="SEGUROS">SEGUROS</option>
+                        {availableRubros.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -5832,7 +5971,9 @@ export default function App() {
                           ? 'Empleado / Personal'
                           : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
                           ? 'Organismo / Entidad'
-                          : 'Proveedor / Empresa'}{' '}
+                          : formData.rubro === 'PROVEEDOR'
+                          ? 'Proveedor / Empresa'
+                          : `${formData.rubro}`}{' '}
                         <span className="text-rose-400">*</span>
                       </label>
 
@@ -5852,7 +5993,9 @@ export default function App() {
                                   ? 'empleado'
                                   : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
                                   ? 'organismo'
-                                  : 'proveedor'
+                                  : formData.rubro === 'PROVEEDOR'
+                                  ? 'proveedor'
+                                  : (formData.rubro || '').toLowerCase()
                               } --`}
                           </span>
                           {formData.empresaConcepto && maestrosCuit[formData.empresaConcepto] && (
@@ -5882,11 +6025,7 @@ export default function App() {
 
                           <div className="max-h-48 overflow-y-auto p-1 divide-y divide-slate-800/40">
                             {sortAlphabetical(
-                              formData.rubro === 'EMPLEADOS'
-                                ? maestros.empleados || []
-                                : formData.rubro === 'IMPUESTO' || formData.rubro === 'SEGUROS'
-                                ? maestros.impuestos || []
-                                : maestros.proveedores || []
+                              getEntityListForRubro(formData.rubro)
                             )
                               .filter((ent) => {
                                 if (!entitySearchFilter) return true
