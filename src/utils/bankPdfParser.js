@@ -78,10 +78,21 @@ export const ORDEN_CATEGORIAS = [
 ]
 
 /**
+ * Normaliza textos para comparación exacta
+ */
+function normText(str = '') {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Quita tildes
+    .replace(/[^a-z0-9]/g, '')       // Solo alfanuméricos
+}
+
+/**
  * Asigna una categoría a partir del detalle normalizado
  */
 export function clasificarMovimientoBanco(detalle = '') {
-  const detalleNorm = (detalle || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const detalleNorm = normText(detalle)
   for (const [categoria, palabrasClave] of Object.entries(REGLAS_CATEGORIAS)) {
     if (palabrasClave.some((kw) => detalleNorm.includes(kw))) {
       return categoria
@@ -103,16 +114,13 @@ async function extractTextLinesFromPDF(arrayBuffer) {
     const page = await pdf.getPage(pageNum)
     const textContent = await page.getTextContent()
     
-    // Agrupar items por coordenada Y aproximada para reconstruir líneas visuales exactas
     const items = textContent.items || []
     if (items.length === 0) continue
 
-    // Ordenar verticalmente (y descendente) y horizontalmente (x ascendente)
     const lineMap = new Map()
     for (const item of items) {
       if (!item.str) continue
-      const y = Math.round(item.transform[5]) // Posición vertical
-      // Agrupar con tolerancia de +/- 3 puntos
+      const y = Math.round(item.transform[5])
       let foundY = null
       for (const existingY of lineMap.keys()) {
         if (Math.abs(existingY - y) <= 3) {
@@ -127,7 +135,6 @@ async function extractTextLinesFromPDF(arrayBuffer) {
       lineMap.get(groupY).push(item)
     }
 
-    // Ordenar líneas por Y descendente (de arriba a abajo)
     const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a)
 
     for (const y of sortedYs) {
@@ -156,7 +163,6 @@ export async function parsePdfExtractoBanco(file) {
   if (matchCta) {
     account = matchCta[1]
   } else {
-    // Buscar cualquier cuenta típica de banco
     const matchGen = rawFullText.match(/cuenta\s*n[°o\.:]?\s*([0-9\/\-]+)/i)
     if (matchGen) {
       account = matchGen[1].replace(/[^0-9]/g, '')
@@ -172,7 +178,6 @@ export async function parsePdfExtractoBanco(file) {
   let lastSaldo = null
   let saldoAnterior = null
 
-  // Regex para fechas dd/mm/aa o dd/mm/aaaa
   const dateRegex = /^\d{2}\/\d{2}\/\d{2,4}/
   const numberRegex = /[\d.]+,[0-9]{2}/g
 
@@ -251,11 +256,10 @@ export async function parsePdfExtractoBanco(file) {
     }
   }
 
-  // 3. Generar Cálculos Agrupados (Hojas 2, 3 y 4 del Programa Original)
+  // 3. Generar Cálculos Agrupados
   const fechas = transactions.map((t) => t.FECHA).filter(Boolean)
   const periodo = fechas.length ? `${fechas[0]} al ${fechas[fechas.length - 1]}` : 'Desconocido'
 
-  // Determinar mes y año detectado del extracto
   let detectedMonthNumber = null
   let detectedYear = null
   if (fechas.length > 0) {
@@ -400,7 +404,6 @@ export function exportarAnalisisBancoExcel(analisis) {
   const ws4 = XLSX.utils.aoa_to_sheet(ws4Data)
   XLSX.utils.book_append_sheet(wb, ws4, 'Detalle por Categoria')
 
-  // Descargar archivo Excel .xlsx
   const filename = `estado_cuenta_final_${analisis.account}_${analisis.periodo.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`
   XLSX.writeFile(wb, filename)
 }
@@ -408,7 +411,7 @@ export function exportarAnalisisBancoExcel(analisis) {
 /**
  * Autocompleta el archivo oficial de Conciliación Sindicato (.xlsx)
  * PRESERVANDO AL 100% todos los estilos, colores, fuentes, bordes, tamaños de fila y fórmulas
- * utilizando ExcelJS para manipulación fidedigna de hojas de cálculo.
+ * mediante coincidencia EXACTA de etiquetas (sin tocar depósitos ni cheques pendientes).
  */
 export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnalisis, targetSheetName = null) {
   if (!excelFile || !pdfAnalisis) {
@@ -433,7 +436,7 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
       'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
       'Jul', 'Ago', 'Sept', 'Octub', 'Nov', 'Dic'
     ]
-    const mNum = pdfAnalisis.detectedMonthNumber || 9 // Default a Septiembre si no detecta
+    const mNum = pdfAnalisis.detectedMonthNumber || 9
     const mPrefix = monthNames[mNum - 1]
     const yr = pdfAnalisis.detectedYear || '2026'
 
@@ -458,11 +461,8 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
   // 2. Determinar si es Cuenta Cobros (Columna B / izquierda) o Cuenta Pagos (Columna H / derecha)
   const isPagos = pdfAnalisis.account.includes('2341055145') || pdfAnalisis.tipo === 'Pagos'
 
-  // ExcelJS usa columnas 1-indexadas:
-  // Cuenta 2324 (Cobros): Columna B = 2, Etiqueta en A = 1
-  // Cuenta 5145 (Pagos): Columna H = 8, Etiqueta en G = 7
-  const labelColIdx = isPagos ? 7 : 1 // G ó A
-  const valColIdx = isPagos ? 8 : 2   // H ó B
+  const labelColIdx = isPagos ? 7 : 1 // Columna G = 7 ó Columna A = 1
+  const valColIdx = isPagos ? 8 : 2   // Columna H = 8 ó Columna B = 2
 
   // Obtener los totales por categoría del análisis
   const catTotals = {}
@@ -470,19 +470,20 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
     catTotals[c.categoria] = c
   })
 
-  // 3. Mapear e insertar valores fila por fila buscando las etiquetas exactas en la hoja
+  // 3. Mapear e insertar valores fila por fila con COINCIDENCIA EXACTA DE ETIQUETA
   targetWs.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber > 45) return
 
     const labelCell = row.getCell(labelColIdx)
     const labelVal = labelCell?.value
-    const labelText = typeof labelVal === 'string' ? labelVal.toUpperCase().trim() : ''
+    const labelRaw = typeof labelVal === 'string' ? labelVal.trim() : ''
+    const labelNorm = normText(labelRaw)
 
-    if (!labelText) return
+    if (!labelNorm) return
 
     const targetCell = row.getCell(valColIdx)
 
-    // Función segura para actualizar solo el valor numérico conservando estilos
+    // Función para actualizar solo el valor numérico conservando estilos
     const setAmount = (val) => {
       const numVal = Number(Number(val || 0).toFixed(2))
       targetCell.value = numVal
@@ -491,39 +492,53 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
       }
     }
 
-    if (labelText.includes('SALDO ANTERIOR') && pdfAnalisis.saldoAnterior !== null && pdfAnalisis.saldoAnterior !== undefined) {
+    // A. Saldo anterior
+    if (labelNorm === 'saldoanteriorsbco' && pdfAnalisis.saldoAnterior !== null && pdfAnalisis.saldoAnterior !== undefined) {
       setAmount(pdfAnalisis.saldoAnterior)
-    } else if (labelText.includes('IMPUESTOS DEB/CRED')) {
+    }
+    // B. Impuestos Débito/Crédito (Ley 25.413)
+    else if (labelNorm === 'impuestosdebcred') {
       const deb = catTotals['IMPUESTOS DEB/CRED'] ? catTotals['IMPUESTOS DEB/CRED'].debitos : 0
       setAmount(deb)
-    } else if (labelText.includes('IVA DEBITO') || labelText.includes('IVA DÉBITO')) {
+    }
+    // C. IVA Débito
+    else if (labelNorm === 'ivadebito') {
       const deb = catTotals['IVA DEBITO'] ? catTotals['IVA DEBITO'].debitos : 0
       setAmount(deb)
-    } else if (labelText.includes('COMISIONES Y GASTOS')) {
+    }
+    // D. Comisiones y Gastos
+    else if (labelNorm === 'comisionesygastos') {
       const deb = catTotals['COMISIONES Y GASTOS'] ? catTotals['COMISIONES Y GASTOS'].debitos : 0
       setAmount(deb)
-    } else if (labelText.includes('CHEQUES DEBITADOS')) {
+    }
+    // E. Cheques Debitados
+    else if (labelNorm === 'chequesdebitados') {
       const deb = catTotals['CHEQUES DEBITADOS'] ? catTotals['CHEQUES DEBITADOS'].debitos : 0
       setAmount(deb)
-    } else if (labelText.includes('INTERDEP') || labelText.includes('INTERDEPÓSITOS') || labelText.includes('INTERDEPOSITOS')) {
+    }
+    // F. Interdepósitos
+    else if (labelNorm === 'interdepositos') {
       const deb = catTotals['INTERDEPOSITOS'] ? catTotals['INTERDEPOSITOS'].debitos : 0
       setAmount(deb)
-    } else if (labelText.includes('DEPÓSITOS') || labelText.includes('DEPOSITOS')) {
-      // Depósitos son créditos (ingresos)
+    }
+    // G. Depósitos (Créditos en el banco) - SOLO cuando la etiqueta sea EXACTAMENTE "DEPÓSITOS", NUNCA si dice "PENDIENTES"
+    else if (labelNorm === 'depositos') {
       const cred = catTotals['DEPOSITOS'] ? catTotals['DEPOSITOS'].creditos : 0
       setAmount(cred)
-    } else if (labelText === 'SUBTOTAL' && pdfAnalisis.saldoFinal !== null && pdfAnalisis.saldoFinal !== undefined) {
+    }
+    // H. Subtotal
+    else if (labelNorm === 'subtotal' && pdfAnalisis.saldoFinal !== null && pdfAnalisis.saldoFinal !== undefined) {
       setAmount(pdfAnalisis.saldoFinal)
     }
   })
 
-  // Actualizar Saldo Contable si existe en la fila inferior
+  // 4. Actualizar celda de Saldo Contable si existe en la fila inferior
   for (let r = 25; r <= 35; r++) {
     const row = targetWs.getRow(r)
     const nextCell = row.getCell(valColIdx + 1)
-    const nextVal = typeof nextCell?.value === 'string' ? nextCell.value.toUpperCase().trim() : ''
+    const nextVal = typeof nextCell?.value === 'string' ? normText(nextCell.value) : ''
 
-    if (nextVal.includes('SALDO CONTABLE')) {
+    if (nextVal === 'saldocontable') {
       const targetCell = row.getCell(valColIdx)
       if (pdfAnalisis.saldoFinal !== null && pdfAnalisis.saldoFinal !== undefined) {
         targetCell.value = Number(Number(pdfAnalisis.saldoFinal).toFixed(2))
@@ -532,7 +547,7 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
     }
   }
 
-  // 4. Escribir el libro completo con ExcelJS (conservando 100% formato nativo)
+  // 5. Escribir el libro completo con ExcelJS
   const updatedBuffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([updatedBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
