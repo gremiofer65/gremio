@@ -753,14 +753,20 @@ export default function App() {
         const cuitMap = {}
         const dynamicLabels = {}
         dbMaestros.forEach((item) => {
+          if (!item.nombre) return
+          if (item.categoria === '__CUIT_RECORD__' && item.nombre.includes(':::')) {
+            const [ent, c] = item.nombre.split(':::')
+            if (ent && c) cuitMap[ent] = c
+            return
+          }
           if (!grouped[item.categoria]) grouped[item.categoria] = []
-          if (item.nombre === '__CATEGORY_HEADER__') {
-            if (item.cuit) dynamicLabels[item.categoria] = item.cuit
-          } else if (item.nombre) {
+          if (item.nombre.startsWith('__CAT_LABEL__:')) {
+            dynamicLabels[item.categoria] = item.nombre.replace('__CAT_LABEL__:', '')
+          } else if (item.nombre.startsWith('__CATEGORY_HEADER__')) {
+            const customName = item.nombre.replace('__CATEGORY_HEADER__', '').replace(/^:/, '')
+            if (customName) dynamicLabels[item.categoria] = customName
+          } else {
             grouped[item.categoria].push(item.nombre)
-            if (item.cuit) {
-              cuitMap[item.nombre] = item.cuit
-            }
           }
         })
         setMaestros((prev) => {
@@ -1057,8 +1063,14 @@ export default function App() {
     try {
       await supabase.from('maestros').delete().match({ categoria: catalogKey, nombre: trimmed })
       await supabase.from('maestros').insert([
-        { categoria: catalogKey, nombre: trimmed, cuit: trimmedCuit || null, activo: true }
+        { categoria: catalogKey, nombre: trimmed, activo: true }
       ])
+      if (trimmedCuit) {
+        await supabase.from('maestros').delete().match({ categoria: '__CUIT_RECORD__', nombre: `${trimmed}:::${trimmedCuit}` })
+        await supabase.from('maestros').insert([
+          { categoria: '__CUIT_RECORD__', nombre: `${trimmed}:::${trimmedCuit}`, activo: true }
+        ])
+      }
     } catch (err) {
       console.error('Error guardando en maestros en Supabase:', err)
     }
@@ -1090,12 +1102,11 @@ export default function App() {
 
     // Persistir categoría permanentemente en Supabase
     try {
-      await supabase.from('maestros').delete().match({ categoria: key, nombre: '__CATEGORY_HEADER__' })
+      await supabase.from('maestros').delete().match({ categoria: key, nombre: `__CAT_LABEL__:${trimmed}` })
       await supabase.from('maestros').insert([
         {
           categoria: key,
-          nombre: '__CATEGORY_HEADER__',
-          cuit: trimmed,
+          nombre: `__CAT_LABEL__:${trimmed}`,
           activo: true
         }
       ])
@@ -1198,9 +1209,15 @@ export default function App() {
       await supabase.from('maestros').insert({
         categoria: catalogKey,
         nombre: trimmed,
-        cuit: trimmedCuit || null,
         activo: true
       })
+      if (trimmedCuit) {
+        await supabase.from('maestros').delete().like('nombre', `${oldVal}:::%`)
+        await supabase.from('maestros').delete().like('nombre', `${trimmed}:::%`)
+        await supabase.from('maestros').insert([
+          { categoria: '__CUIT_RECORD__', nombre: `${trimmed}:::${trimmedCuit}`, activo: true }
+        ])
+      }
       await supabase.from('movimientos').update({ empresa_concepto: trimmed }).match({ empresa_concepto: oldVal })
     } catch (err) {
       console.error('Error actualizando maestro en Supabase:', err)
@@ -1227,6 +1244,7 @@ export default function App() {
     // Persistir eliminación en Supabase
     try {
       await supabase.from('maestros').delete().match({ categoria: catalogKey, nombre: itemToDelete })
+      await supabase.from('maestros').delete().like('nombre', `${itemToDelete}:::%`)
     } catch (err) {
       console.error('Error eliminando maestro de Supabase:', err)
     }
@@ -1248,20 +1266,13 @@ export default function App() {
       return copy
     })
 
-    // Detect category if not provided
-    let cat = catalogCategory
-    if (!cat) {
-      if ((maestros.medicos || []).includes(trimmedEntity)) cat = 'medicos'
-      else if ((maestros.empleados || []).includes(trimmedEntity)) cat = 'empleados'
-      else if ((maestros.impuestos || []).includes(trimmedEntity)) cat = 'impuestos'
-      else cat = 'proveedores'
-    }
-
     try {
-      await supabase.from('maestros').delete().match({ categoria: cat, nombre: trimmedEntity })
-      await supabase.from('maestros').insert([
-        { categoria: cat, nombre: trimmedEntity, cuit: trimmedCuit || null, activo: true }
-      ])
+      await supabase.from('maestros').delete().like('nombre', `${trimmedEntity}:::%`)
+      if (trimmedCuit) {
+        await supabase.from('maestros').insert([
+          { categoria: '__CUIT_RECORD__', nombre: `${trimmedEntity}:::${trimmedCuit}`, activo: true }
+        ])
+      }
     } catch (err) {
       console.error('Error guardando CUIT en Supabase:', err)
     }
