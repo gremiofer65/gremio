@@ -136,15 +136,15 @@ export const formatDateDMY = (dateStr) => {
 }
 
 /**
- * Parser inteligente de prestaciones médicas en Detalle Extenso (ej: "21 consulta y 2 práctica a $ 8000 c/u")
+ * Parser inteligente de prestaciones médicas en Detalle Extenso (ej: "21 consulta y 2 práctica a $ 8000 c/u" o "21 consultas a $8000 y 2 prácticas a $12000")
  */
 export function parseDetalleHonorariosMedicos(rawText = '') {
   if (!rawText || typeof rawText !== 'string') return null
   const text = rawText.trim()
   if (!text) return null
 
-  // 1. Detectar precio unitario compartido: "a $ 8000 c/u", "a $8000", "$8000 c/u", "a $ 8.000 c/u"
-  const sharedPriceMatch = text.match(/(?:a|de|\$)\s*\$?\s*([\d\.,]+)\s*(?:c\/u|cada\s*un[oa]|por\s*unida?d?)?/i)
+  // 1. Detectar si hay un precio global compartido al final (ej: "... a $ 8000 c/u")
+  const sharedPriceMatch = text.match(/(?:a|de|\$)\s*\$?\s*([\d\.,]+)\s*(?:c\/u|cada\s*un[oa]|por\s*unida?d?)?\s*$/i)
   let sharedPrice = null
   if (sharedPriceMatch) {
     const pStr = sharedPriceMatch[1].replace(/\./g, '').replace(',', '.')
@@ -153,9 +153,6 @@ export function parseDetalleHonorariosMedicos(rawText = '') {
       sharedPrice = pNum
     }
   }
-
-  // Quitar la sección de precios para que no confunda números de precio con cantidades
-  const textWithoutPrices = text.replace(/(?:a|de|\$)\s*\$?\s*[\d\.,]+(?:\s*c\/u|\s*cada\s*un[oa]|\s*por\s*unida?d?)?/gi, ' ')
 
   // 2. Diccionario de conceptos médicos estándar
   const MEDICAL_KEYWORDS = {
@@ -197,31 +194,74 @@ export function parseDetalleHonorariosMedicos(rawText = '') {
     atenciones: 'Atenciones'
   }
 
+  // Dividir por conectores ("y", "e", ",", ";", "\n", "+")
+  const segments = text.split(/(?:\s+[ye]\s+|\s*,\s*|\s*;\s*|\r?\n|\s*\+\s*)/i)
   const items = []
-  
-  // Buscar patrones "<cantidad> <concepto>"
-  const regex = /(\d+)\s*(?:de\s+)?([a-záéíóúñ]+)/gi
-  let m
-  while ((m = regex.exec(textWithoutPrices)) !== null) {
-    const qty = parseInt(m[1], 10)
-    const word = m[2].toLowerCase()
 
-    if (MEDICAL_KEYWORDS[word]) {
-      const concepto = MEDICAL_KEYWORDS[word]
-      items.push({
-        cantidad: qty,
-        concepto,
-        precioUnitario: sharedPrice,
-        subtotal: sharedPrice ? (qty * sharedPrice) : null
-      })
-    } else if (word.length >= 3 && !['los', 'las', 'del', 'por', 'con', 'para', 'una', 'uno', 'dias', 'mes', 'año'].includes(word)) {
-      const concepto = word.charAt(0).toUpperCase() + word.slice(1)
-      items.push({
-        cantidad: qty,
-        concepto,
-        precioUnitario: sharedPrice,
-        subtotal: sharedPrice ? (qty * sharedPrice) : null
-      })
+  for (const seg of segments) {
+    const segTrim = seg.trim()
+    if (!segTrim) continue
+
+    // Detectar precio unitario local dentro del segmento si existe: "a $ 8000", "($8000)", "$8000 c/u", ": $8000"
+    const segPriceMatch = segTrim.match(/(?:a|de|\$|\(|\:)\s*\$?\s*([\d\.,]+)\s*(?:c\/u|cada\s*un[oa]|por\s*unida?d?)?\)?/i)
+    let segPrice = null
+    if (segPriceMatch) {
+      const pStr = segPriceMatch[1].replace(/\./g, '').replace(',', '.')
+      const pNum = parseFloat(pStr)
+      if (!isNaN(pNum) && pNum > 0) {
+        segPrice = pNum
+      }
+    }
+
+    // Quitar la porción de precio del segmento
+    const segWithoutPrice = segTrim.replace(/(?:a|de|\$|\(|\:)\s*\$?\s*[\d\.,]+(?:\s*c\/u|\s*cada\s*un[oa]|\s*por\s*unida?d?)?\)?/gi, ' ')
+
+    const m = segWithoutPrice.match(/(\d+)\s*(?:de\s+)?([a-záéíóúñ]+)/i)
+    if (m) {
+      const qty = parseInt(m[1], 10)
+      const word = m[2].toLowerCase()
+      let concepto = null
+
+      if (MEDICAL_KEYWORDS[word]) {
+        concepto = MEDICAL_KEYWORDS[word]
+      } else if (word.length >= 3 && !['los', 'las', 'del', 'por', 'con', 'para', 'una', 'uno', 'dias', 'mes', 'año'].includes(word)) {
+        concepto = word.charAt(0).toUpperCase() + word.slice(1)
+      }
+
+      if (concepto && qty > 0) {
+        const itemPrice = segPrice || sharedPrice || null
+        items.push({
+          cantidad: qty,
+          concepto,
+          precioUnitario: itemPrice,
+          subtotal: itemPrice ? (qty * itemPrice) : null
+        })
+      }
+    }
+  }
+
+  // Fallback global si segmentación no dio items
+  if (items.length === 0) {
+    const textWithoutPrices = text.replace(/(?:a|de|\$)\s*\$?\s*[\d\.,]+(?:\s*c\/u|\s*cada\s*un[oa]|\s*por\s*unida?d?)?/gi, ' ')
+    const regex = /(\d+)\s*(?:de\s+)?([a-záéíóúñ]+)/gi
+    let m
+    while ((m = regex.exec(textWithoutPrices)) !== null) {
+      const qty = parseInt(m[1], 10)
+      const word = m[2].toLowerCase()
+      let concepto = null
+      if (MEDICAL_KEYWORDS[word]) {
+        concepto = MEDICAL_KEYWORDS[word]
+      } else if (word.length >= 3 && !['los', 'las', 'del', 'por', 'con', 'para', 'una', 'uno', 'dias', 'mes', 'año'].includes(word)) {
+        concepto = word.charAt(0).toUpperCase() + word.slice(1)
+      }
+      if (concepto && qty > 0) {
+        items.push({
+          cantidad: qty,
+          concepto,
+          precioUnitario: sharedPrice,
+          subtotal: sharedPrice ? (qty * sharedPrice) : null
+        })
+      }
     }
   }
 
@@ -1156,16 +1196,22 @@ export default function App() {
     porcentajeRetencion: 5,
     retencionesMed: '',
     netoPagadoMed: '',
-    medicoConsultas: '',
-    medicoPracticas: '',
-    medicoEcografias: '',
-    medicoCirugias: '',
-    medicoGuardias: '',
-    medicoInformes: '',
+    medicoConsultasCant: '',
+    medicoConsultasValor: '',
+    medicoPracticasCant: '',
+    medicoPracticasValor: '',
+    medicoEcografiasCant: '',
+    medicoEcografiasValor: '',
+    medicoCirugiasCant: '',
+    medicoCirugiasValor: '',
+    medicoGuardiasCant: '',
+    medicoGuardiasValor: '',
+    medicoInformesCant: '',
+    medicoInformesValor: '',
     medicoOtrasConcepto: '',
     medicoOtrasCantidad: '',
-    medicoValorUnitario: '',
-    medicoAutoSync: true,
+    medicoOtrasValor: '',
+    medicoValorGlobal: '',
     // Ingresos Detallados
     ingresosCFL: '',
     ingresosCENS: '',
@@ -2029,84 +2075,119 @@ export default function App() {
     })
   }
 
-  // Sincronizar desglose de prestaciones médicas (consultas, prácticas, etc.) con Detalle Extenso y Bruto
+  // Sincronizar desglose de prestaciones médicas con valores independientes por cada prestación
   const handleSyncMedicoDesglose = (overrides = {}) => {
     setFormData((prev) => {
-      const c = overrides.medicoConsultas !== undefined ? overrides.medicoConsultas : prev.medicoConsultas
-      const p = overrides.medicoPracticas !== undefined ? overrides.medicoPracticas : prev.medicoPracticas
-      const eco = overrides.medicoEcografias !== undefined ? overrides.medicoEcografias : prev.medicoEcografias
-      const cir = overrides.medicoCirugias !== undefined ? overrides.medicoCirugias : prev.medicoCirugias
-      const gua = overrides.medicoGuardias !== undefined ? overrides.medicoGuardias : prev.medicoGuardias
-      const inf = overrides.medicoInformes !== undefined ? overrides.medicoInformes : prev.medicoInformes
-      const oConc = overrides.medicoOtrasConcepto !== undefined ? overrides.medicoOtrasConcepto : prev.medicoOtrasConcepto
-      const oQty = overrides.medicoOtrasCantidad !== undefined ? overrides.medicoOtrasCantidad : prev.medicoOtrasCantidad
-      const vUnit = overrides.medicoValorUnitario !== undefined ? overrides.medicoValorUnitario : prev.medicoValorUnitario
+      const updated = { ...prev, ...overrides }
 
-      const cNum = parseInt(c, 10) || 0
-      const pNum = parseInt(p, 10) || 0
-      const ecoNum = parseInt(eco, 10) || 0
-      const cirNum = parseInt(cir, 10) || 0
-      const guaNum = parseInt(gua, 10) || 0
-      const infNum = parseInt(inf, 10) || 0
-      const oNum = parseInt(oQty, 10) || 0
-      const unitNum = parseFloat(vUnit) || 0
-
-      const parts = []
-      if (cNum > 0) parts.push(`${cNum} ${cNum === 1 ? 'consulta' : 'consultas'}`)
-      if (pNum > 0) parts.push(`${pNum} ${pNum === 1 ? 'práctica' : 'prácticas'}`)
-      if (ecoNum > 0) parts.push(`${ecoNum} ${ecoNum === 1 ? 'ecografía' : 'ecografías'}`)
-      if (cirNum > 0) parts.push(`${cirNum} ${cirNum === 1 ? 'cirugía' : 'cirugías'}`)
-      if (guaNum > 0) parts.push(`${guaNum} ${guaNum === 1 ? 'guardia' : 'guardias'}`)
-      if (infNum > 0) parts.push(`${infNum} ${infNum === 1 ? 'informe' : 'informes'}`)
-      if (oNum > 0) {
-        const cleanOConc = (oConc || 'otra prestación').trim().toLowerCase()
-        parts.push(`${oNum} ${cleanOConc}`)
-      }
-
-      let generatedText = ''
-      if (parts.length > 0) {
-        generatedText = parts.join(' y ')
-        if (unitNum > 0) {
-          generatedText += ` a $ ${unitNum} c/u`
+      const items = [
+        {
+          nombre: 'consultas',
+          cant: parseInt(updated.medicoConsultasCant, 10) || 0,
+          valor: parseFloat(updated.medicoConsultasValor) || 0,
+          label: (parseInt(updated.medicoConsultasCant, 10) || 0) === 1 ? 'consulta' : 'consultas'
+        },
+        {
+          nombre: 'prácticas',
+          cant: parseInt(updated.medicoPracticasCant, 10) || 0,
+          valor: parseFloat(updated.medicoPracticasValor) || 0,
+          label: (parseInt(updated.medicoPracticasCant, 10) || 0) === 1 ? 'práctica' : 'prácticas'
+        },
+        {
+          nombre: 'ecografías',
+          cant: parseInt(updated.medicoEcografiasCant, 10) || 0,
+          valor: parseFloat(updated.medicoEcografiasValor) || 0,
+          label: (parseInt(updated.medicoEcografiasCant, 10) || 0) === 1 ? 'ecografía' : 'ecografías'
+        },
+        {
+          nombre: 'cirugías',
+          cant: parseInt(updated.medicoCirugiasCant, 10) || 0,
+          valor: parseFloat(updated.medicoCirugiasValor) || 0,
+          label: (parseInt(updated.medicoCirugiasCant, 10) || 0) === 1 ? 'cirugía' : 'cirugías'
+        },
+        {
+          nombre: 'guardias',
+          cant: parseInt(updated.medicoGuardiasCant, 10) || 0,
+          valor: parseFloat(updated.medicoGuardiasValor) || 0,
+          label: (parseInt(updated.medicoGuardiasCant, 10) || 0) === 1 ? 'guardia' : 'guardias'
+        },
+        {
+          nombre: 'informes',
+          cant: parseInt(updated.medicoInformesCant, 10) || 0,
+          valor: parseFloat(updated.medicoInformesValor) || 0,
+          label: (parseInt(updated.medicoInformesCant, 10) || 0) === 1 ? 'informe' : 'informes'
         }
+      ]
+
+      const oCant = parseInt(updated.medicoOtrasCantidad, 10) || 0
+      const oVal = parseFloat(updated.medicoOtrasValor) || 0
+      const oConc = (updated.medicoOtrasConcepto || 'otra prestación').trim().toLowerCase()
+      if (oCant > 0) {
+        items.push({
+          nombre: oConc,
+          cant: oCant,
+          valor: oVal,
+          label: oConc
+        })
       }
 
-      const totalQty = cNum + pNum + ecoNum + cirNum + guaNum + infNum + oNum
-      const totalBruto = totalQty * unitNum
+      const activeItems = items.filter((it) => it.cant > 0)
 
-      const updated = {
-        ...prev,
-        ...overrides,
-        medicoConsultas: c,
-        medicoPracticas: p,
-        medicoEcografias: eco,
-        medicoCirugias: cir,
-        medicoGuardias: gua,
-        medicoInformes: inf,
-        medicoOtrasConcepto: oConc,
-        medicoOtrasCantidad: oQty,
-        medicoValorUnitario: vUnit
-      }
+      if (activeItems.length > 0) {
+        const prices = activeItems.filter((it) => it.valor > 0).map((it) => it.valor)
+        const allSamePrice = prices.length === activeItems.length && prices.every((p) => p === prices[0])
+        const sharedPrice = allSamePrice ? prices[0] : null
 
-      if (generatedText) {
-        updated.detalleExtenso = generatedText
-      }
-
-      if (totalBruto > 0) {
-        updated.pagosMed = totalBruto.toFixed(2)
-        const isAplicar = updated.aplicarRetencion
-        const pct = parseFloat(updated.porcentajeRetencion) || 0
-        if (!isAplicar) {
-          updated.retencionesMed = '0.00'
-          updated.netoPagadoMed = totalBruto.toFixed(2)
+        let generatedText = ''
+        if (sharedPrice) {
+          const parts = activeItems.map((it) => `${it.cant} ${it.label}`)
+          generatedText = `${parts.join(' y ')} a $ ${sharedPrice} c/u`
         } else {
-          const ret = totalBruto * (pct / 100)
-          updated.retencionesMed = ret.toFixed(2)
-          updated.netoPagadoMed = (totalBruto - ret).toFixed(2)
+          const parts = activeItems.map((it) => {
+            if (it.valor > 0) {
+              return `${it.cant} ${it.label} a $ ${it.valor} c/u`
+            }
+            return `${it.cant} ${it.label}`
+          })
+          generatedText = parts.join(' y ')
+        }
+
+        if (generatedText) {
+          updated.detalleExtenso = generatedText
+        }
+
+        const totalBruto = activeItems.reduce((acc, it) => acc + (it.cant * it.valor), 0)
+        if (totalBruto > 0) {
+          updated.pagosMed = totalBruto.toFixed(2)
+          const isAplicar = updated.aplicarRetencion
+          const pct = parseFloat(updated.porcentajeRetencion) || 0
+          if (!isAplicar) {
+            updated.retencionesMed = '0.00'
+            updated.netoPagadoMed = totalBruto.toFixed(2)
+          } else {
+            const ret = totalBruto * (pct / 100)
+            updated.retencionesMed = ret.toFixed(2)
+            updated.netoPagadoMed = (totalBruto - ret).toFixed(2)
+          }
         }
       }
 
       return updated
+    })
+  }
+
+  // Helper para aplicar un valor unitario masivo a todas las prestaciones activas
+  const handleApplyGlobalValorToAll = (valToApply) => {
+    const vStr = String(valToApply || '')
+    handleSyncMedicoDesglose({
+      medicoValorGlobal: vStr,
+      medicoConsultasValor: formData.medicoConsultasCant ? vStr : formData.medicoConsultasValor,
+      medicoPracticasValor: formData.medicoPracticasCant ? vStr : formData.medicoPracticasValor,
+      medicoEcografiasValor: formData.medicoEcografiasCant ? vStr : formData.medicoEcografiasValor,
+      medicoCirugiasValor: formData.medicoCirugiasCant ? vStr : formData.medicoCirugiasValor,
+      medicoGuardiasValor: formData.medicoGuardiasCant ? vStr : formData.medicoGuardiasValor,
+      medicoInformesValor: formData.medicoInformesCant ? vStr : formData.medicoInformesValor,
+      medicoOtrasValor: formData.medicoOtrasCantidad ? vStr : formData.medicoOtrasValor
     })
   }
 
@@ -2115,42 +2196,59 @@ export default function App() {
     const parsed = parseDetalleHonorariosMedicos(rawText)
     if (!parsed) return
 
-    let c = ''
-    let p = ''
-    let eco = ''
-    let cir = ''
-    let gua = ''
-    let inf = ''
-    let oQty = ''
-    let oConc = ''
+    let cCant = '', cVal = ''
+    let pCant = '', pVal = ''
+    let ecoCant = '', ecoVal = ''
+    let cirCant = '', cirVal = ''
+    let guaCant = '', guaVal = ''
+    let infCant = '', infVal = ''
+    let oQty = '', oVal = '', oConc = ''
 
     parsed.items.forEach((it) => {
-      if (it.concepto === 'Consultas') c = String(it.cantidad)
-      else if (it.concepto === 'Prácticas') p = String(it.cantidad)
-      else if (it.concepto === 'Ecografías') eco = String(it.cantidad)
-      else if (it.concepto === 'Cirugías') cir = String(it.cantidad)
-      else if (it.concepto === 'Guardias') gua = String(it.cantidad)
-      else if (it.concepto === 'Informes') inf = String(it.cantidad)
-      else {
+      const uPrice = it.precioUnitario ? String(it.precioUnitario) : (parsed.sharedPrice ? String(parsed.sharedPrice) : '')
+      if (it.concepto === 'Consultas') {
+        cCant = String(it.cantidad)
+        cVal = uPrice
+      } else if (it.concepto === 'Prácticas') {
+        pCant = String(it.cantidad)
+        pVal = uPrice
+      } else if (it.concepto === 'Ecografías') {
+        ecoCant = String(it.cantidad)
+        ecoVal = uPrice
+      } else if (it.concepto === 'Cirugías') {
+        cirCant = String(it.cantidad)
+        cirVal = uPrice
+      } else if (it.concepto === 'Guardias') {
+        guaCant = String(it.cantidad)
+        guaVal = uPrice
+      } else if (it.concepto === 'Informes') {
+        infCant = String(it.cantidad)
+        infVal = uPrice
+      } else {
         oQty = String(it.cantidad)
+        oVal = uPrice
         oConc = it.concepto
       }
     })
 
-    const unitPrice = parsed.sharedPrice ? String(parsed.sharedPrice) : ''
-
     setFormData((prev) => {
       const updated = {
         ...prev,
-        medicoConsultas: c,
-        medicoPracticas: p,
-        medicoEcografias: eco,
-        medicoCirugias: cir,
-        medicoGuardias: gua,
-        medicoInformes: inf,
+        medicoConsultasCant: cCant,
+        medicoConsultasValor: cVal,
+        medicoPracticasCant: pCant,
+        medicoPracticasValor: pVal,
+        medicoEcografiasCant: ecoCant,
+        medicoEcografiasValor: ecoVal,
+        medicoCirugiasCant: cirCant,
+        medicoCirugiasValor: cirVal,
+        medicoGuardiasCant: guaCant,
+        medicoGuardiasValor: guaVal,
+        medicoInformesCant: infCant,
+        medicoInformesValor: infVal,
         medicoOtrasConcepto: oConc,
         medicoOtrasCantidad: oQty,
-        medicoValorUnitario: unitPrice
+        medicoOtrasValor: oVal
       }
 
       if (parsed.totalCalculado && parsed.totalCalculado > 0) {
@@ -2257,28 +2355,41 @@ export default function App() {
       parsedMedioPago = 'DEBITO'
     }
 
-    let medC = ''
-    let medP = ''
-    let medEco = ''
-    let medCir = ''
-    let medGua = ''
-    let medInf = ''
-    let medOQty = ''
-    let medOConc = ''
+    let medCCant = '', medCVal = ''
+    let medPCant = '', medPVal = ''
+    let medEcoCant = '', medEcoVal = ''
+    let medCirCant = '', medCirVal = ''
+    let medGuaCant = '', medGuaVal = ''
+    let medInfCant = '', medInfVal = ''
+    let medOQty = '', medOVal = '', medOConc = ''
     let medUnit = ''
 
     if (mov.rubro === 'MÉDICO') {
       const parsedMed = parseDetalleHonorariosMedicos(mov.detalleExtenso || mov.detalle)
       if (parsedMed) {
         parsedMed.items.forEach((it) => {
-          if (it.concepto === 'Consultas') medC = String(it.cantidad)
-          else if (it.concepto === 'Prácticas') medP = String(it.cantidad)
-          else if (it.concepto === 'Ecografías') medEco = String(it.cantidad)
-          else if (it.concepto === 'Cirugías') medCir = String(it.cantidad)
-          else if (it.concepto === 'Guardias') medGua = String(it.cantidad)
-          else if (it.concepto === 'Informes') medInf = String(it.cantidad)
-          else {
+          const uPrice = it.precioUnitario ? String(it.precioUnitario) : (parsedMed.sharedPrice ? String(parsedMed.sharedPrice) : '')
+          if (it.concepto === 'Consultas') {
+            medCCant = String(it.cantidad)
+            medCVal = uPrice
+          } else if (it.concepto === 'Prácticas') {
+            medPCant = String(it.cantidad)
+            medPVal = uPrice
+          } else if (it.concepto === 'Ecografías') {
+            medEcoCant = String(it.cantidad)
+            medEcoVal = uPrice
+          } else if (it.concepto === 'Cirugías') {
+            medCirCant = String(it.cantidad)
+            medCirVal = uPrice
+          } else if (it.concepto === 'Guardias') {
+            medGuaCant = String(it.cantidad)
+            medGuaVal = uPrice
+          } else if (it.concepto === 'Informes') {
+            medInfCant = String(it.cantidad)
+            medInfVal = uPrice
+          } else {
             medOQty = String(it.cantidad)
+            medOVal = uPrice
             medOConc = it.concepto
           }
         })
@@ -2320,16 +2431,22 @@ export default function App() {
       porcentajeRetencion: pctRet,
       retencionesMed: mov.retencionesMed ? String(mov.retencionesMed) : '',
       netoPagadoMed: mov.netoPagadoMed ? String(mov.netoPagadoMed) : '',
-      medicoConsultas: medC,
-      medicoPracticas: medP,
-      medicoEcografias: medEco,
-      medicoCirugias: medCir,
-      medicoGuardias: medGua,
-      medicoInformes: medInf,
+      medicoConsultasCant: medCCant,
+      medicoConsultasValor: medCVal,
+      medicoPracticasCant: medPCant,
+      medicoPracticasValor: medPVal,
+      medicoEcografiasCant: medEcoCant,
+      medicoEcografiasValor: medEcoVal,
+      medicoCirugiasCant: medCirCant,
+      medicoCirugiasValor: medCirVal,
+      medicoGuardiasCant: medGuaCant,
+      medicoGuardiasValor: medGuaVal,
+      medicoInformesCant: medInfCant,
+      medicoInformesValor: medInfVal,
       medicoOtrasConcepto: medOConc,
       medicoOtrasCantidad: medOQty,
-      medicoValorUnitario: medUnit,
-      medicoAutoSync: true,
+      medicoOtrasValor: medOVal,
+      medicoValorGlobal: medUnit,
       ingresosCFL: mov.ingresosCFL ? String(mov.ingresosCFL) : '',
       ingresosCENS: mov.ingresosCENS ? String(mov.ingresosCENS) : '',
       ingresosBilleteras: mov.ingresosBilleteras ? String(mov.ingresosBilleteras) : '',
@@ -4753,10 +4870,15 @@ export default function App() {
                                   {parsed.items.map((it, idx) => (
                                     <span
                                       key={idx}
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30 whitespace-nowrap"
+                                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30 whitespace-nowrap"
                                     >
                                       <span className="font-bold text-white">{it.cantidad}</span>
                                       <span>{it.concepto}</span>
+                                      {it.precioUnitario && !parsed.sharedPrice && (
+                                        <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/20 px-1 rounded">
+                                          ${it.precioUnitario}
+                                        </span>
+                                      )}
                                     </span>
                                   ))}
                                   {parsed.sharedPrice && (
@@ -6201,190 +6323,355 @@ export default function App() {
 
               {modalType === 'MEDICO' && (
                 <div className="bg-slate-950 p-3.5 sm:p-4 rounded-xl border border-slate-800 space-y-4">
-                  {/* Assistant / Breakdown Engine con palabras predefinidas */}
-                  <div className="bg-slate-900/90 p-3.5 rounded-xl border border-blue-500/20 space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  {/* Assistant / Breakdown Engine con prestaciones y valores independientes */}
+                  <div className="bg-slate-900/90 p-3.5 sm:p-4 rounded-xl border border-blue-500/20 space-y-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-800 pb-2.5">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-blue-400" />
-                        <span className="text-xs font-bold text-white">Desglose de Prestaciones Médicas</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-400">
-                          Total Prestaciones:{' '}
-                          <strong className="text-white font-mono">
-                            {(parseInt(formData.medicoConsultas, 10) || 0) +
-                              (parseInt(formData.medicoPracticas, 10) || 0) +
-                              (parseInt(formData.medicoEcografias, 10) || 0) +
-                              (parseInt(formData.medicoCirugias, 10) || 0) +
-                              (parseInt(formData.medicoGuardias, 10) || 0) +
-                              (parseInt(formData.medicoInformes, 10) || 0) +
-                              (parseInt(formData.medicoOtrasCantidad, 10) || 0)}
-                          </strong>
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Fila 1: Prestaciones más comunes con títulos ya fijos */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <label className="text-[11px] font-bold text-blue-400 block mb-1">
-                          🩺 Consultas (Cant.)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={formData.medicoConsultas}
-                          onChange={(e) => handleSyncMedicoDesglose({ medicoConsultas: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-
-                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <label className="text-[11px] font-bold text-indigo-400 block mb-1">
-                          💉 Prácticas (Cant.)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={formData.medicoPracticas}
-                          onChange={(e) => handleSyncMedicoDesglose({ medicoPracticas: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
-
-                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <label className="text-[11px] font-bold text-cyan-400 block mb-1">
-                          📷 Ecografías (Cant.)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={formData.medicoEcografias}
-                          onChange={(e) => handleSyncMedicoDesglose({ medicoEcografias: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
-                        />
-                      </div>
-
-                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <label className="text-[11px] font-bold text-rose-400 block mb-1">
-                          🏥 Cirugías (Cant.)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={formData.medicoCirugias}
-                          onChange={(e) => handleSyncMedicoDesglose({ medicoCirugias: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-rose-500"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Fila 2: Guardias, Informes, Otra y Valor Unitario */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <label className="text-[11px] font-bold text-purple-400 block mb-1">
-                          ⏱️ Guardias (Cant.)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={formData.medicoGuardias}
-                          onChange={(e) => handleSyncMedicoDesglose({ medicoGuardias: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-purple-500"
-                        />
-                      </div>
-
-                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <label className="text-[11px] font-bold text-teal-400 block mb-1">
-                          📋 Informes / Est. (Cant.)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder="0"
-                          value={formData.medicoInformes}
-                          onChange={(e) => handleSyncMedicoDesglose({ medicoInformes: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-teal-500"
-                        />
-                      </div>
-
-                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <label className="text-[11px] font-bold text-slate-300 block mb-1">
-                          ➕ Otra (Cant. / Tipo)
-                        </label>
-                        <div className="flex gap-1">
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="Cant."
-                            value={formData.medicoOtrasCantidad}
-                            onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasCantidad: e.target.value })}
-                            className="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-slate-500"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Tipo..."
-                            value={formData.medicoOtrasConcepto}
-                            onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasConcepto: e.target.value })}
-                            className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-500"
-                          />
+                        <div>
+                          <span className="text-xs font-bold text-white block">Desglose de Prestaciones Médicas</span>
+                          <span className="text-[10px] text-slate-400">Cada prestación tiene su propia cantidad y valor unitario</span>
                         </div>
                       </div>
 
-                      <div className="bg-slate-950 p-2 rounded-lg border border-amber-500/30">
-                        <label className="text-[11px] font-bold text-amber-400 block mb-1">
-                          💵 Valor Unitario ($ c/u)
-                        </label>
+                      {/* Asignación rápida masiva de valor */}
+                      <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                        <span className="text-[10px] text-slate-400 font-medium pl-1">Valor a todas:</span>
                         <input
                           type="number"
                           step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={formData.medicoValorUnitario}
-                          onChange={(e) => handleSyncMedicoDesglose({ medicoValorUnitario: e.target.value })}
-                          className="w-full bg-slate-900 border border-amber-500/50 rounded px-2.5 py-1 text-sm text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                          placeholder="Ej: 8000"
+                          value={formData.medicoValorGlobal || ''}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, medicoValorGlobal: e.target.value }))}
+                          className="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
                         />
+                        <button
+                          type="button"
+                          onClick={() => handleApplyGlobalValorToAll(formData.medicoValorGlobal)}
+                          className="px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold transition cursor-pointer"
+                          title="Aplica este valor a todas las prestaciones con cantidad > 0"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Grilla de prestaciones con sus propios valores individuales */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {/* 1. Consultas */}
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-blue-400 flex items-center gap-1">
+                            🩺 Consultas
+                          </span>
+                          {(parseInt(formData.medicoConsultasCant, 10) || 0) > 0 && (parseFloat(formData.medicoConsultasValor) || 0) > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                              {fmtMoney((parseInt(formData.medicoConsultasCant, 10) || 0) * (parseFloat(formData.medicoConsultasValor) || 0))}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={formData.medicoConsultasCant}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoConsultasCant: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={formData.medicoConsultasValor}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoConsultasValor: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2. Prácticas */}
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-indigo-400 flex items-center gap-1">
+                            💉 Prácticas
+                          </span>
+                          {(parseInt(formData.medicoPracticasCant, 10) || 0) > 0 && (parseFloat(formData.medicoPracticasValor) || 0) > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                              {fmtMoney((parseInt(formData.medicoPracticasCant, 10) || 0) * (parseFloat(formData.medicoPracticasValor) || 0))}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={formData.medicoPracticasCant}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoPracticasCant: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={formData.medicoPracticasValor}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoPracticasValor: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3. Ecografías */}
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-cyan-400 flex items-center gap-1">
+                            📷 Ecografías
+                          </span>
+                          {(parseInt(formData.medicoEcografiasCant, 10) || 0) > 0 && (parseFloat(formData.medicoEcografiasValor) || 0) > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                              {fmtMoney((parseInt(formData.medicoEcografiasCant, 10) || 0) * (parseFloat(formData.medicoEcografiasValor) || 0))}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={formData.medicoEcografiasCant}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoEcografiasCant: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={formData.medicoEcografiasValor}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoEcografiasValor: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 4. Cirugías */}
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-rose-400 flex items-center gap-1">
+                            🏥 Cirugías
+                          </span>
+                          {(parseInt(formData.medicoCirugiasCant, 10) || 0) > 0 && (parseFloat(formData.medicoCirugiasValor) || 0) > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                              {fmtMoney((parseInt(formData.medicoCirugiasCant, 10) || 0) * (parseFloat(formData.medicoCirugiasValor) || 0))}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={formData.medicoCirugiasCant}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoCirugiasCant: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-rose-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={formData.medicoCirugiasValor}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoCirugiasValor: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 5. Guardias */}
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-purple-400 flex items-center gap-1">
+                            ⏱️ Guardias
+                          </span>
+                          {(parseInt(formData.medicoGuardiasCant, 10) || 0) > 0 && (parseFloat(formData.medicoGuardiasValor) || 0) > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                              {fmtMoney((parseInt(formData.medicoGuardiasCant, 10) || 0) * (parseFloat(formData.medicoGuardiasValor) || 0))}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={formData.medicoGuardiasCant}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoGuardiasCant: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={formData.medicoGuardiasValor}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoGuardiasValor: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 6. Informes */}
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-teal-400 flex items-center gap-1">
+                            📋 Informes / Est.
+                          </span>
+                          {(parseInt(formData.medicoInformesCant, 10) || 0) > 0 && (parseFloat(formData.medicoInformesValor) || 0) > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                              {fmtMoney((parseInt(formData.medicoInformesCant, 10) || 0) * (parseFloat(formData.medicoInformesValor) || 0))}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={formData.medicoInformesCant}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoInformesCant: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-teal-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={formData.medicoInformesValor}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoInformesValor: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 7. Otra prestación personalizada */}
+                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5 sm:col-span-2 lg:col-span-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
+                            ➕ Otra Prestación Personalizada
+                          </span>
+                          {(parseInt(formData.medicoOtrasCantidad, 10) || 0) > 0 && (parseFloat(formData.medicoOtrasValor) || 0) > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400">
+                              {fmtMoney((parseInt(formData.medicoOtrasCantidad, 10) || 0) * (parseFloat(formData.medicoOtrasValor) || 0))}
+                            </span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Nombre / Tipo</label>
+                            <input
+                              type="text"
+                              placeholder="Ej: endoscopías..."
+                              value={formData.medicoOtrasConcepto}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasConcepto: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={formData.medicoOtrasCantidad}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasCantidad: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-slate-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                              value={formData.medicoOtrasValor}
+                              onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasValor: e.target.value })}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     {/* Resumen en vivo */}
-                    {((parseInt(formData.medicoConsultas, 10) || 0) +
-                      (parseInt(formData.medicoPracticas, 10) || 0) +
-                      (parseInt(formData.medicoEcografias, 10) || 0) +
-                      (parseInt(formData.medicoCirugias, 10) || 0) +
-                      (parseInt(formData.medicoGuardias, 10) || 0) +
-                      (parseInt(formData.medicoInformes, 10) || 0) +
-                      (parseInt(formData.medicoOtrasCantidad, 10) || 0) > 0 &&
-                      parseFloat(formData.medicoValorUnitario) > 0) && (
-                      <div className="pt-1 flex items-center justify-between text-xs bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                    {((parseInt(formData.medicoConsultasCant, 10) || 0) +
+                      (parseInt(formData.medicoPracticasCant, 10) || 0) +
+                      (parseInt(formData.medicoEcografiasCant, 10) || 0) +
+                      (parseInt(formData.medicoCirugiasCant, 10) || 0) +
+                      (parseInt(formData.medicoGuardiasCant, 10) || 0) +
+                      (parseInt(formData.medicoInformesCant, 10) || 0) +
+                      (parseInt(formData.medicoOtrasCantidad, 10) || 0) > 0) && (
+                      <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-xs bg-slate-950 px-3 py-2.5 rounded-lg border border-slate-800">
                         <span className="text-slate-400">
-                          Resumen:{' '}
-                          <strong className="text-slate-200 font-mono">
-                            {(parseInt(formData.medicoConsultas, 10) || 0) +
-                              (parseInt(formData.medicoPracticas, 10) || 0) +
-                              (parseInt(formData.medicoEcografias, 10) || 0) +
-                              (parseInt(formData.medicoCirugias, 10) || 0) +
-                              (parseInt(formData.medicoGuardias, 10) || 0) +
-                              (parseInt(formData.medicoInformes, 10) || 0) +
-                              (parseInt(formData.medicoOtrasCantidad, 10) || 0)}{' '}
-                            prestaciones × {fmtMoney(formData.medicoValorUnitario)}
+                          Total Prestaciones:{' '}
+                          <strong className="text-white font-mono font-bold">
+                            {(parseInt(formData.medicoConsultasCant, 10) || 0) +
+                              (parseInt(formData.medicoPracticasCant, 10) || 0) +
+                              (parseInt(formData.medicoEcografiasCant, 10) || 0) +
+                              (parseInt(formData.medicoCirugiasCant, 10) || 0) +
+                              (parseInt(formData.medicoGuardiasCant, 10) || 0) +
+                              (parseInt(formData.medicoInformesCant, 10) || 0) +
+                              (parseInt(formData.medicoOtrasCantidad, 10) || 0)}
                           </strong>
                         </span>
                         <span className="font-mono font-bold text-emerald-400 text-sm">
-                          Subtotal Calculado: {fmtMoney(
-                            ((parseInt(formData.medicoConsultas, 10) || 0) +
-                              (parseInt(formData.medicoPracticas, 10) || 0) +
-                              (parseInt(formData.medicoEcografias, 10) || 0) +
-                              (parseInt(formData.medicoCirugias, 10) || 0) +
-                              (parseInt(formData.medicoGuardias, 10) || 0) +
-                              (parseInt(formData.medicoInformes, 10) || 0) +
-                              (parseInt(formData.medicoOtrasCantidad, 10) || 0)) *
-                              (parseFloat(formData.medicoValorUnitario) || 0)
+                          Total Bruto Calculado: {fmtMoney(
+                            (parseInt(formData.medicoConsultasCant, 10) || 0) * (parseFloat(formData.medicoConsultasValor) || 0) +
+                            (parseInt(formData.medicoPracticasCant, 10) || 0) * (parseFloat(formData.medicoPracticasValor) || 0) +
+                            (parseInt(formData.medicoEcografiasCant, 10) || 0) * (parseFloat(formData.medicoEcografiasValor) || 0) +
+                            (parseInt(formData.medicoCirugiasCant, 10) || 0) * (parseFloat(formData.medicoCirugiasValor) || 0) +
+                            (parseInt(formData.medicoGuardiasCant, 10) || 0) * (parseFloat(formData.medicoGuardiasValor) || 0) +
+                            (parseInt(formData.medicoInformesCant, 10) || 0) * (parseFloat(formData.medicoInformesValor) || 0) +
+                            (parseInt(formData.medicoOtrasCantidad, 10) || 0) * (parseFloat(formData.medicoOtrasValor) || 0)
                           )}
                         </span>
                       </div>
