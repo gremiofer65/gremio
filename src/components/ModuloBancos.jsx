@@ -25,11 +25,13 @@ import {
   Sparkles,
   Download,
   AlertTriangle,
-  FileCheck
+  FileCheck,
+  FolderOpen
 } from 'lucide-react'
 import {
   parsePdfExtractoBanco,
   exportarAnalisisBancoExcel,
+  autocompletarExcelConciliacionSindicato,
   ORDEN_CATEGORIAS
 } from '../utils/bankPdfParser'
 
@@ -59,6 +61,12 @@ export default function ModuloBancos({
   const [pdfSearchTerm, setPdfSearchTerm] = useState('')
   const [pdfCatFilter, setPdfCatFilter] = useState('TODAS')
   const fileInputRef = useRef(null)
+
+  // Estado de Autocompletado del Archivo de Conciliación Sindicato Excel (.xlsx)
+  const [isFillingExcel, setIsFillingExcel] = useState(false)
+  const [excelFillResult, setExcelFillResult] = useState(null)
+  const [excelFillError, setExcelFillError] = useState(null)
+  const excelFillInputRef = useRef(null)
 
   // Saldo según extracto bancario oficial ingresado manualmente para conciliar
   const [extractoBancarioSaldo, setExtractoBancarioSaldo] = useState(() => {
@@ -129,6 +137,8 @@ export default function ModuloBancos({
     try {
       setIsProcessingPdf(true)
       setPdfError(null)
+      setExcelFillResult(null)
+      setExcelFillError(null)
       const resultado = await parsePdfExtractoBanco(file)
       
       if (!resultado || !resultado.transactions || resultado.transactions.length === 0) {
@@ -145,6 +155,37 @@ export default function ModuloBancos({
     } finally {
       setIsProcessingPdf(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  // Autocompletar el archivo de Conciliación Sindicato Excel seleccionado por el usuario
+  const handleExcelFillUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls')) {
+      setExcelFillError('Por favor seleccione un archivo de Excel válido (.xlsx).')
+      return
+    }
+
+    if (!pdfAnalisis) {
+      setExcelFillError('Primero debe cargar y analizar un extracto PDF para poder rellenar el Excel.')
+      return
+    }
+
+    try {
+      setIsFillingExcel(true)
+      setExcelFillError(null)
+      setExcelFillResult(null)
+
+      const result = await autocompletarExcelConciliacionSindicato(file, pdfAnalisis)
+      setExcelFillResult(result)
+    } catch (err) {
+      console.error('Error autocompletando Excel de conciliación:', err)
+      setExcelFillError('Error al autocompletar Excel: ' + (err.message || 'Error desconocido'))
+    } finally {
+      setIsFillingExcel(false)
+      if (excelFillInputRef.current) excelFillInputRef.current.value = ''
     }
   }
 
@@ -459,6 +500,16 @@ export default function ModuloBancos({
               id="bank-pdf-upload"
             />
 
+            {/* Hidden Input para Cargar Plantilla de Conciliación Sindicato Excel */}
+            <input
+              type="file"
+              ref={excelFillInputRef}
+              onChange={handleExcelFillUpload}
+              accept=".xlsx,.xls"
+              className="hidden"
+              id="sindicato-excel-upload"
+            />
+
             <div className="max-w-xl mx-auto space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 mx-auto shadow-inner">
                 <UploadCloud className="w-7 h-7" />
@@ -466,10 +517,10 @@ export default function ModuloBancos({
 
               <div>
                 <h3 className="text-base font-bold text-white">
-                  Cargar Extracto Bancario en PDF (Banco Provincia / Link)
+                  1. Cargar Extracto Bancario en PDF (Banco Provincia / Link)
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Arrastra o selecciona el PDF oficial de "Estado de Cuenta". El sistema procesará automáticamente las transacciones, detectará cuentas (2341052324 Cobros / 2341055145 Pagos), categorizará débitos/créditos y generará el Excel de 4 hojas idéntico al programa original.
+                  Arrastra o selecciona el PDF oficial de "Estado de Cuenta". El sistema procesará automáticamente las transacciones, detectará cuentas (2341052324 Cobros / 2341055145 Pagos) y categorizará débitos/créditos.
                 </p>
               </div>
 
@@ -485,15 +536,29 @@ export default function ModuloBancos({
                 </label>
 
                 {pdfAnalisis && (
-                  <button
-                    type="button"
-                    onClick={() => exportarAnalisisBancoExcel(pdfAnalisis)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 transition cursor-pointer active:scale-95"
-                    title="Descargar Excel completo con las 4 Hojas (Estado de Cuenta, Totales por Detalle, Resumen Categoría, Detalle Categoría)"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Descargar Excel 4 Hojas (.xlsx)</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => exportarAnalisisBancoExcel(pdfAnalisis)}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 transition cursor-pointer active:scale-95"
+                      title="Descargar Excel con las 4 Hojas (Estado de Cuenta, Totales por Detalle, Resumen Categoría, Detalle Categoría)"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Descargar Excel 4 Hojas (.xlsx)</span>
+                    </button>
+
+                    {/* BOTON PARA AUTOCOMPLETAR EL ARCHIVO EXCEL DE CONCILIACIÓN SINDICATO */}
+                    <label
+                      htmlFor="sindicato-excel-upload"
+                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 transition cursor-pointer active:scale-95 ${
+                        isFillingExcel ? 'opacity-50 pointer-events-none' : ''
+                      }`}
+                      title="Seleccionar la planilla 'Conciliación Sindicato 2026 2027.xlsx' para rellenar automáticamente la columna correspondiente"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      <span>{isFillingExcel ? 'Autocompletando...' : '📁 Autocompletar en Excel Sindicato'}</span>
+                    </label>
+                  </>
                 )}
               </div>
 
@@ -501,6 +566,25 @@ export default function ModuloBancos({
                 <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center justify-center gap-2 mt-3 animate-in fade-in">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{pdfError}</span>
+                </div>
+              )}
+
+              {excelFillError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center justify-center gap-2 mt-3 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{excelFillError}</span>
+                </div>
+              )}
+
+              {excelFillResult && (
+                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs space-y-1 mt-3 animate-in fade-in">
+                  <div className="flex items-center justify-center gap-2 font-bold text-sm text-emerald-200">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>¡Planilla de Conciliación Autocompletada con Éxito!</span>
+                  </div>
+                  <p className="text-slate-300">
+                    Se rellenaron los valores en la hoja <strong className="text-white">"{excelFillResult.sheetUpdated}"</strong> para la cuenta <strong className="text-sky-300">{excelFillResult.cuentaActualizada}</strong>. El archivo descargado ya contiene los montos exactos y las fórmulas actualizadas.
+                  </p>
                 </div>
               )}
             </div>
