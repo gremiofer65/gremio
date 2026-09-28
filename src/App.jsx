@@ -1522,13 +1522,8 @@ export default function App() {
     sortAlphabetical(maestros.empleados || []).forEach((e) => {
       map[e] = { nombre: e, tipo: 'EMPLEADOS', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
     })
-    sortAlphabetical(maestros.impuestos || []).forEach((imp) => {
-      if (!map[imp]) {
-        map[imp] = { nombre: imp, tipo: 'IMPUESTO', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
-      }
-    })
 
-    // Init custom catalogs & all custom tables
+    // Init custom catalogs & custom entity tables only
     Object.keys(maestros).forEach((k) => {
       if (['proveedores', 'medicos', 'empleados', 'impuestos', 'conceptosGastos', 'conceptosHonorarios', 'sedes', 'ingresosTipos'].includes(k)) return
       const customType = (customCatalogLabels[k] || catalogLabels[k] || k.replace(/_/g, ' ')).toUpperCase()
@@ -1612,7 +1607,6 @@ export default function App() {
         (ccFilterType === 'PROVEEDORES' && e.tipo === 'PROVEEDOR') ||
         (ccFilterType === 'MEDICOS' && e.tipo === 'MÉDICO') ||
         (ccFilterType === 'EMPLEADOS' && e.tipo === 'EMPLEADOS') ||
-        (ccFilterType === 'IMPUESTOS' && (e.tipo === 'IMPUESTO' || e.tipo === 'IMPUESTOS' || e.tipo === 'SEGUROS')) ||
         e.tipo === ccFilterType ||
         (e.tipo && e.tipo.toUpperCase() === ccFilterType.toUpperCase())
 
