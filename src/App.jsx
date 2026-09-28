@@ -1158,6 +1158,10 @@ export default function App() {
     netoPagadoMed: '',
     medicoConsultas: '',
     medicoPracticas: '',
+    medicoEcografias: '',
+    medicoCirugias: '',
+    medicoGuardias: '',
+    medicoInformes: '',
     medicoOtrasConcepto: '',
     medicoOtrasCantidad: '',
     medicoValorUnitario: '',
@@ -2030,18 +2034,30 @@ export default function App() {
     setFormData((prev) => {
       const c = overrides.medicoConsultas !== undefined ? overrides.medicoConsultas : prev.medicoConsultas
       const p = overrides.medicoPracticas !== undefined ? overrides.medicoPracticas : prev.medicoPracticas
+      const eco = overrides.medicoEcografias !== undefined ? overrides.medicoEcografias : prev.medicoEcografias
+      const cir = overrides.medicoCirugias !== undefined ? overrides.medicoCirugias : prev.medicoCirugias
+      const gua = overrides.medicoGuardias !== undefined ? overrides.medicoGuardias : prev.medicoGuardias
+      const inf = overrides.medicoInformes !== undefined ? overrides.medicoInformes : prev.medicoInformes
       const oConc = overrides.medicoOtrasConcepto !== undefined ? overrides.medicoOtrasConcepto : prev.medicoOtrasConcepto
       const oQty = overrides.medicoOtrasCantidad !== undefined ? overrides.medicoOtrasCantidad : prev.medicoOtrasCantidad
       const vUnit = overrides.medicoValorUnitario !== undefined ? overrides.medicoValorUnitario : prev.medicoValorUnitario
 
       const cNum = parseInt(c, 10) || 0
       const pNum = parseInt(p, 10) || 0
+      const ecoNum = parseInt(eco, 10) || 0
+      const cirNum = parseInt(cir, 10) || 0
+      const guaNum = parseInt(gua, 10) || 0
+      const infNum = parseInt(inf, 10) || 0
       const oNum = parseInt(oQty, 10) || 0
       const unitNum = parseFloat(vUnit) || 0
 
       const parts = []
       if (cNum > 0) parts.push(`${cNum} ${cNum === 1 ? 'consulta' : 'consultas'}`)
       if (pNum > 0) parts.push(`${pNum} ${pNum === 1 ? 'práctica' : 'prácticas'}`)
+      if (ecoNum > 0) parts.push(`${ecoNum} ${ecoNum === 1 ? 'ecografía' : 'ecografías'}`)
+      if (cirNum > 0) parts.push(`${cirNum} ${cirNum === 1 ? 'cirugía' : 'cirugías'}`)
+      if (guaNum > 0) parts.push(`${guaNum} ${guaNum === 1 ? 'guardia' : 'guardias'}`)
+      if (infNum > 0) parts.push(`${infNum} ${infNum === 1 ? 'informe' : 'informes'}`)
       if (oNum > 0) {
         const cleanOConc = (oConc || 'otra prestación').trim().toLowerCase()
         parts.push(`${oNum} ${cleanOConc}`)
@@ -2055,12 +2071,21 @@ export default function App() {
         }
       }
 
-      const totalQty = cNum + pNum + oNum
+      const totalQty = cNum + pNum + ecoNum + cirNum + guaNum + infNum + oNum
       const totalBruto = totalQty * unitNum
 
       const updated = {
         ...prev,
-        ...overrides
+        ...overrides,
+        medicoConsultas: c,
+        medicoPracticas: p,
+        medicoEcografias: eco,
+        medicoCirugias: cir,
+        medicoGuardias: gua,
+        medicoInformes: inf,
+        medicoOtrasConcepto: oConc,
+        medicoOtrasCantidad: oQty,
+        medicoValorUnitario: vUnit
       }
 
       if (generatedText) {
@@ -2092,15 +2117,21 @@ export default function App() {
 
     let c = ''
     let p = ''
+    let eco = ''
+    let cir = ''
+    let gua = ''
+    let inf = ''
     let oQty = ''
     let oConc = ''
 
     parsed.items.forEach((it) => {
-      if (it.concepto === 'Consultas') {
-        c = String(it.cantidad)
-      } else if (it.concepto === 'Prácticas') {
-        p = String(it.cantidad)
-      } else {
+      if (it.concepto === 'Consultas') c = String(it.cantidad)
+      else if (it.concepto === 'Prácticas') p = String(it.cantidad)
+      else if (it.concepto === 'Ecografías') eco = String(it.cantidad)
+      else if (it.concepto === 'Cirugías') cir = String(it.cantidad)
+      else if (it.concepto === 'Guardias') gua = String(it.cantidad)
+      else if (it.concepto === 'Informes') inf = String(it.cantidad)
+      else {
         oQty = String(it.cantidad)
         oConc = it.concepto
       }
@@ -2113,6 +2144,10 @@ export default function App() {
         ...prev,
         medicoConsultas: c,
         medicoPracticas: p,
+        medicoEcografias: eco,
+        medicoCirugias: cir,
+        medicoGuardias: gua,
+        medicoInformes: inf,
         medicoOtrasConcepto: oConc,
         medicoOtrasCantidad: oQty,
         medicoValorUnitario: unitPrice
@@ -2224,6 +2259,10 @@ export default function App() {
 
     let medC = ''
     let medP = ''
+    let medEco = ''
+    let medCir = ''
+    let medGua = ''
+    let medInf = ''
     let medOQty = ''
     let medOConc = ''
     let medUnit = ''
@@ -2234,6 +2273,10 @@ export default function App() {
         parsedMed.items.forEach((it) => {
           if (it.concepto === 'Consultas') medC = String(it.cantidad)
           else if (it.concepto === 'Prácticas') medP = String(it.cantidad)
+          else if (it.concepto === 'Ecografías') medEco = String(it.cantidad)
+          else if (it.concepto === 'Cirugías') medCir = String(it.cantidad)
+          else if (it.concepto === 'Guardias') medGua = String(it.cantidad)
+          else if (it.concepto === 'Informes') medInf = String(it.cantidad)
           else {
             medOQty = String(it.cantidad)
             medOConc = it.concepto
@@ -2279,6 +2322,10 @@ export default function App() {
       netoPagadoMed: mov.netoPagadoMed ? String(mov.netoPagadoMed) : '',
       medicoConsultas: medC,
       medicoPracticas: medP,
+      medicoEcografias: medEco,
+      medicoCirugias: medCir,
+      medicoGuardias: medGua,
+      medicoInformes: medInf,
       medicoOtrasConcepto: medOConc,
       medicoOtrasCantidad: medOQty,
       medicoValorUnitario: medUnit,
@@ -6154,61 +6201,121 @@ export default function App() {
 
               {modalType === 'MEDICO' && (
                 <div className="bg-slate-950 p-3.5 sm:p-4 rounded-xl border border-slate-800 space-y-4">
-                  {/* Assistant / Breakdown Engine */}
-                  <div className="bg-slate-900/90 p-3 rounded-lg border border-blue-500/20 space-y-2.5">
+                  {/* Assistant / Breakdown Engine con palabras predefinidas */}
+                  <div className="bg-slate-900/90 p-3.5 rounded-xl border border-blue-500/20 space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-blue-400" />
                         <span className="text-xs font-bold text-white">Desglose de Prestaciones Médicas</span>
                       </div>
-                      <span className="text-[11px] text-slate-400">
-                        Total Prestaciones:{' '}
-                        <strong className="text-white font-mono">
-                          {(parseInt(formData.medicoConsultas, 10) || 0) +
-                            (parseInt(formData.medicoPracticas, 10) || 0) +
-                            (parseInt(formData.medicoOtrasCantidad, 10) || 0)}
-                        </strong>
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400">
+                          Total Prestaciones:{' '}
+                          <strong className="text-white font-mono">
+                            {(parseInt(formData.medicoConsultas, 10) || 0) +
+                              (parseInt(formData.medicoPracticas, 10) || 0) +
+                              (parseInt(formData.medicoEcografias, 10) || 0) +
+                              (parseInt(formData.medicoCirugias, 10) || 0) +
+                              (parseInt(formData.medicoGuardias, 10) || 0) +
+                              (parseInt(formData.medicoInformes, 10) || 0) +
+                              (parseInt(formData.medicoOtrasCantidad, 10) || 0)}
+                          </strong>
+                        </span>
+                      </div>
                     </div>
 
+                    {/* Fila 1: Prestaciones más comunes con títulos ya fijos */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                      <div>
-                        <label className="text-[10px] font-semibold text-blue-300 block mb-0.5">
-                          Consultas (Cant.)
+                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <label className="text-[11px] font-bold text-blue-400 block mb-1">
+                          🩺 Consultas (Cant.)
                         </label>
                         <input
                           type="number"
                           min="0"
-                          placeholder="Ej: 21"
+                          placeholder="0"
                           value={formData.medicoConsultas}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            handleSyncMedicoDesglose({ medicoConsultas: val })
-                          }}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
+                          onChange={(e) => handleSyncMedicoDesglose({ medicoConsultas: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-blue-500"
                         />
                       </div>
 
-                      <div>
-                        <label className="text-[10px] font-semibold text-blue-300 block mb-0.5">
-                          Prácticas (Cant.)
+                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <label className="text-[11px] font-bold text-indigo-400 block mb-1">
+                          💉 Prácticas (Cant.)
                         </label>
                         <input
                           type="number"
                           min="0"
-                          placeholder="Ej: 2"
+                          placeholder="0"
                           value={formData.medicoPracticas}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            handleSyncMedicoDesglose({ medicoPracticas: val })
-                          }}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
+                          onChange={(e) => handleSyncMedicoDesglose({ medicoPracticas: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
                         />
                       </div>
 
-                      <div>
-                        <label className="text-[10px] font-semibold text-cyan-300 block mb-0.5">
-                          Otras (Cant. / Tipo)
+                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <label className="text-[11px] font-bold text-cyan-400 block mb-1">
+                          📷 Ecografías (Cant.)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={formData.medicoEcografias}
+                          onChange={(e) => handleSyncMedicoDesglose({ medicoEcografias: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-cyan-500"
+                        />
+                      </div>
+
+                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <label className="text-[11px] font-bold text-rose-400 block mb-1">
+                          🏥 Cirugías (Cant.)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={formData.medicoCirugias}
+                          onChange={(e) => handleSyncMedicoDesglose({ medicoCirugias: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-rose-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Fila 2: Guardias, Informes, Otra y Valor Unitario */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <label className="text-[11px] font-bold text-purple-400 block mb-1">
+                          ⏱️ Guardias (Cant.)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={formData.medicoGuardias}
+                          onChange={(e) => handleSyncMedicoDesglose({ medicoGuardias: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+
+                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <label className="text-[11px] font-bold text-teal-400 block mb-1">
+                          📋 Informes / Est. (Cant.)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={formData.medicoInformes}
+                          onChange={(e) => handleSyncMedicoDesglose({ medicoInformes: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-sm text-white font-mono font-bold focus:outline-none focus:border-teal-500"
+                        />
+                      </div>
+
+                      <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <label className="text-[11px] font-bold text-slate-300 block mb-1">
+                          ➕ Otra (Cant. / Tipo)
                         </label>
                         <div className="flex gap-1">
                           <input
@@ -6216,62 +6323,66 @@ export default function App() {
                             min="0"
                             placeholder="Cant."
                             value={formData.medicoOtrasCantidad}
-                            onChange={(e) => {
-                              const val = e.target.value
-                              handleSyncMedicoDesglose({ medicoOtrasCantidad: val })
-                            }}
-                            className="w-14 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                            onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasCantidad: e.target.value })}
+                            className="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-slate-500"
                           />
                           <input
                             type="text"
-                            placeholder="Ej: ecografías"
+                            placeholder="Tipo..."
                             value={formData.medicoOtrasConcepto}
-                            onChange={(e) => {
-                              const val = e.target.value
-                              handleSyncMedicoDesglose({ medicoOtrasConcepto: val })
-                            }}
-                            className="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                            onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasConcepto: e.target.value })}
+                            className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-500"
                           />
                         </div>
                       </div>
 
-                      <div>
-                        <label className="text-[10px] font-semibold text-amber-300 block mb-0.5">
-                          Valor Unitario ($ c/u)
+                      <div className="bg-slate-950 p-2 rounded-lg border border-amber-500/30">
+                        <label className="text-[11px] font-bold text-amber-400 block mb-1">
+                          💵 Valor Unitario ($ c/u)
                         </label>
                         <input
                           type="number"
                           step="0.01"
                           min="0"
-                          placeholder="Ej: 8000"
+                          placeholder="0.00"
                           value={formData.medicoValorUnitario}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            handleSyncMedicoDesglose({ medicoValorUnitario: val })
-                          }}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-500"
+                          onChange={(e) => handleSyncMedicoDesglose({ medicoValorUnitario: e.target.value })}
+                          className="w-full bg-slate-900 border border-amber-500/50 rounded px-2.5 py-1 text-sm text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
                         />
                       </div>
                     </div>
 
+                    {/* Resumen en vivo */}
                     {((parseInt(formData.medicoConsultas, 10) || 0) +
                       (parseInt(formData.medicoPracticas, 10) || 0) +
+                      (parseInt(formData.medicoEcografias, 10) || 0) +
+                      (parseInt(formData.medicoCirugias, 10) || 0) +
+                      (parseInt(formData.medicoGuardias, 10) || 0) +
+                      (parseInt(formData.medicoInformes, 10) || 0) +
                       (parseInt(formData.medicoOtrasCantidad, 10) || 0) > 0 &&
                       parseFloat(formData.medicoValorUnitario) > 0) && (
-                      <div className="pt-1 flex items-center justify-between text-[11px] bg-slate-950/70 px-2.5 py-1 rounded border border-slate-800">
+                      <div className="pt-1 flex items-center justify-between text-xs bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
                         <span className="text-slate-400">
-                          Cálculo:{' '}
-                          <strong className="text-slate-200">
+                          Resumen:{' '}
+                          <strong className="text-slate-200 font-mono">
                             {(parseInt(formData.medicoConsultas, 10) || 0) +
                               (parseInt(formData.medicoPracticas, 10) || 0) +
+                              (parseInt(formData.medicoEcografias, 10) || 0) +
+                              (parseInt(formData.medicoCirugias, 10) || 0) +
+                              (parseInt(formData.medicoGuardias, 10) || 0) +
+                              (parseInt(formData.medicoInformes, 10) || 0) +
                               (parseInt(formData.medicoOtrasCantidad, 10) || 0)}{' '}
                             prestaciones × {fmtMoney(formData.medicoValorUnitario)}
                           </strong>
                         </span>
-                        <span className="font-mono font-bold text-emerald-400">
-                          Subtotal: {fmtMoney(
+                        <span className="font-mono font-bold text-emerald-400 text-sm">
+                          Subtotal Calculado: {fmtMoney(
                             ((parseInt(formData.medicoConsultas, 10) || 0) +
                               (parseInt(formData.medicoPracticas, 10) || 0) +
+                              (parseInt(formData.medicoEcografias, 10) || 0) +
+                              (parseInt(formData.medicoCirugias, 10) || 0) +
+                              (parseInt(formData.medicoGuardias, 10) || 0) +
+                              (parseInt(formData.medicoInformes, 10) || 0) +
                               (parseInt(formData.medicoOtrasCantidad, 10) || 0)) *
                               (parseFloat(formData.medicoValorUnitario) || 0)
                           )}
