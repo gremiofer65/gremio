@@ -2702,7 +2702,7 @@ export default function App() {
                 setActiveTab('libro')
                 setIsMobileSidebarOpen(false)
               }}
-              title="Libro Diario / Caja"
+              title="Planilla Gremio"
               className={`w-full flex items-center ${
                 isSidebarCollapsed ? 'md:justify-center md:px-0 md:py-3' : 'gap-3 px-3.5 py-2.5'
               } rounded-xl text-sm font-medium transition-all cursor-pointer ${
@@ -2712,7 +2712,7 @@ export default function App() {
               }`}
             >
               <BookOpen className="w-4 h-4 shrink-0" />
-              {!isSidebarCollapsed && <span className="truncate">Libro Diario / Caja</span>}
+              {!isSidebarCollapsed && <span className="truncate">Planilla Gremio</span>}
             </button>
 
             <button
@@ -2921,7 +2921,7 @@ export default function App() {
             <div className="min-w-0">
               <h2 className="text-sm md:text-base lg:text-lg font-semibold text-white truncate">
                 {activeTab === 'cuentacorriente' && 'Cuentas Corrientes'}
-                {activeTab === 'libro' && 'Libro Diario / Caja'}
+                {activeTab === 'libro' && 'Planilla Gremio'}
                 {activeTab === 'cajadiaria' && 'Planilla de Caja Diaria'}
                 {activeTab === 'cheques' && 'Gestión y Cartera de Cheques'}
                 {activeTab === 'ivacompras' && 'Libro IVA Compras Digital'}
