@@ -1512,7 +1512,7 @@ export default function App() {
   const entidadesCC = useMemo(() => {
     const map = {}
 
-    // Init from maestros (sorted alphabetically)
+    // Init from standard maestros (sorted alphabetically)
     sortAlphabetical(maestros.proveedores || []).forEach((p) => {
       map[p] = { nombre: p, tipo: 'PROVEEDOR', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
     })
@@ -1521,6 +1521,31 @@ export default function App() {
     })
     sortAlphabetical(maestros.empleados || []).forEach((e) => {
       map[e] = { nombre: e, tipo: 'EMPLEADOS', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
+    })
+    sortAlphabetical(maestros.impuestos || []).forEach((imp) => {
+      if (!map[imp]) {
+        map[imp] = { nombre: imp, tipo: 'IMPUESTO', totalDebito: 0, totalCredito: 0, movimientosCount: 0, pendientesCount: 0, montoPendiente: 0 }
+      }
+    })
+
+    // Init custom catalogs & all custom tables
+    Object.keys(maestros).forEach((k) => {
+      if (['proveedores', 'medicos', 'empleados', 'impuestos', 'conceptosGastos', 'conceptosHonorarios', 'sedes', 'ingresosTipos'].includes(k)) return
+      const customType = (customCatalogLabels[k] || catalogLabels[k] || k.replace(/_/g, ' ')).toUpperCase()
+      sortAlphabetical(maestros[k] || []).forEach((item) => {
+        if (!item || item.startsWith('__')) return
+        if (!map[item]) {
+          map[item] = {
+            nombre: item,
+            tipo: customType,
+            totalDebito: 0,
+            totalCredito: 0,
+            movimientosCount: 0,
+            pendientesCount: 0,
+            montoPendiente: 0
+          }
+        }
+      })
     })
 
     movimientos.forEach((m) => {
@@ -1577,7 +1602,7 @@ export default function App() {
         saldo: ent.totalDebito - ent.totalCredito
       }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
-  }, [movimientos, maestros])
+  }, [movimientos, maestros, customCatalogLabels, catalogLabels])
 
   // Filtered entities list with strict alphabetical order and saldo/pending status filter
   const filteredEntidades = useMemo(() => {
@@ -1586,7 +1611,10 @@ export default function App() {
         ccFilterType === 'TODOS' ||
         (ccFilterType === 'PROVEEDORES' && e.tipo === 'PROVEEDOR') ||
         (ccFilterType === 'MEDICOS' && e.tipo === 'MÉDICO') ||
-        (ccFilterType === 'EMPLEADOS' && e.tipo === 'EMPLEADOS')
+        (ccFilterType === 'EMPLEADOS' && e.tipo === 'EMPLEADOS') ||
+        (ccFilterType === 'IMPUESTOS' && (e.tipo === 'IMPUESTO' || e.tipo === 'IMPUESTOS' || e.tipo === 'SEGUROS')) ||
+        e.tipo === ccFilterType ||
+        (e.tipo && e.tipo.toUpperCase() === ccFilterType.toUpperCase())
 
       const matchSearch =
         ccSearchTerm === '' || e.nombre.toLowerCase().includes(ccSearchTerm.toLowerCase())
@@ -3714,39 +3742,56 @@ export default function App() {
                   </div>
 
                   {/* Tabs Filter by Type */}
-                  <div className="grid grid-cols-4 gap-1 p-1 bg-slate-950 rounded-lg text-[11px] font-semibold text-slate-400">
+                  <div className="flex items-center gap-1 p-1 bg-slate-950 rounded-lg text-[11px] font-semibold text-slate-400 overflow-x-auto no-scrollbar">
                     <button
                       onClick={() => setCcFilterType('TODOS')}
-                      className={`py-1 rounded cursor-pointer transition ${
-                        ccFilterType === 'TODOS' ? 'bg-blue-600 text-white' : 'hover:text-white'
+                      className={`px-2.5 py-1 rounded cursor-pointer transition whitespace-nowrap ${
+                        ccFilterType === 'TODOS' ? 'bg-blue-600 text-white font-bold' : 'hover:text-white'
                       }`}
                     >
                       Todos
                     </button>
                     <button
                       onClick={() => setCcFilterType('MEDICOS')}
-                      className={`py-1 rounded cursor-pointer transition ${
-                        ccFilterType === 'MEDICOS' ? 'bg-blue-600 text-white' : 'hover:text-white'
+                      className={`px-2.5 py-1 rounded cursor-pointer transition whitespace-nowrap ${
+                        ccFilterType === 'MEDICOS' ? 'bg-blue-600 text-white font-bold' : 'hover:text-white'
                       }`}
                     >
                       Médicos
                     </button>
                     <button
                       onClick={() => setCcFilterType('PROVEEDORES')}
-                      className={`py-1 rounded cursor-pointer transition ${
-                        ccFilterType === 'PROVEEDORES' ? 'bg-blue-600 text-white' : 'hover:text-white'
+                      className={`px-2.5 py-1 rounded cursor-pointer transition whitespace-nowrap ${
+                        ccFilterType === 'PROVEEDORES' ? 'bg-blue-600 text-white font-bold' : 'hover:text-white'
                       }`}
                     >
                       Proveed.
                     </button>
                     <button
                       onClick={() => setCcFilterType('EMPLEADOS')}
-                      className={`py-1 rounded cursor-pointer transition ${
-                        ccFilterType === 'EMPLEADOS' ? 'bg-blue-600 text-white' : 'hover:text-white'
+                      className={`px-2.5 py-1 rounded cursor-pointer transition whitespace-nowrap ${
+                        ccFilterType === 'EMPLEADOS' ? 'bg-blue-600 text-white font-bold' : 'hover:text-white'
                       }`}
                     >
                       Personal
                     </button>
+                    {Object.keys(maestros)
+                      .filter((k) => !['proveedores', 'medicos', 'empleados', 'conceptosGastos', 'conceptosHonorarios', 'sedes', 'ingresosTipos'].includes(k))
+                      .map((k) => {
+                        const label = customCatalogLabels[k] || catalogLabels[k] || k.replace(/_/g, ' ')
+                        const typeVal = label.toUpperCase()
+                        return (
+                          <button
+                            key={k}
+                            onClick={() => setCcFilterType(typeVal)}
+                            className={`px-2.5 py-1 rounded cursor-pointer transition whitespace-nowrap ${
+                              ccFilterType === typeVal ? 'bg-blue-600 text-white font-bold' : 'hover:text-white'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        )
+                      })}
                   </div>
 
                   {/* Status Filter (Todas | Falta Imputar | Al Día) */}
