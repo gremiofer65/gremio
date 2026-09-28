@@ -135,6 +135,110 @@ export const formatDateDMY = (dateStr) => {
   return str
 }
 
+/**
+ * Parser inteligente de prestaciones médicas en Detalle Extenso (ej: "21 consulta y 2 práctica a $ 8000 c/u")
+ */
+export function parseDetalleHonorariosMedicos(rawText = '') {
+  if (!rawText || typeof rawText !== 'string') return null
+  const text = rawText.trim()
+  if (!text) return null
+
+  // 1. Detectar precio unitario compartido: "a $ 8000 c/u", "a $8000", "$8000 c/u", "a $ 8.000 c/u"
+  const sharedPriceMatch = text.match(/(?:a|de|\$)\s*\$?\s*([\d\.,]+)\s*(?:c\/u|cada\s*un[oa]|por\s*unida?d?)?/i)
+  let sharedPrice = null
+  if (sharedPriceMatch) {
+    const pStr = sharedPriceMatch[1].replace(/\./g, '').replace(',', '.')
+    const pNum = parseFloat(pStr)
+    if (!isNaN(pNum) && pNum > 0) {
+      sharedPrice = pNum
+    }
+  }
+
+  // Quitar la sección de precios para que no confunda números de precio con cantidades
+  const textWithoutPrices = text.replace(/(?:a|de|\$)\s*\$?\s*[\d\.,]+(?:\s*c\/u|\s*cada\s*un[oa]|\s*por\s*unida?d?)?/gi, ' ')
+
+  // 2. Diccionario de conceptos médicos estándar
+  const MEDICAL_KEYWORDS = {
+    consulta: 'Consultas',
+    consultas: 'Consultas',
+    practica: 'Prácticas',
+    practicas: 'Prácticas',
+    práctica: 'Prácticas',
+    prácticas: 'Prácticas',
+    ecografia: 'Ecografías',
+    ecografias: 'Ecografías',
+    ecografía: 'Ecografías',
+    ecografías: 'Ecografías',
+    cirugia: 'Cirugías',
+    cirugias: 'Cirugías',
+    cirugía: 'Cirugías',
+    cirugías: 'Cirugías',
+    guardia: 'Guardias',
+    guardias: 'Guardias',
+    estudio: 'Estudios',
+    estudios: 'Estudios',
+    informe: 'Informes',
+    informes: 'Informes',
+    sesion: 'Sesiones',
+    sesiones: 'Sesiones',
+    sesión: 'Sesiones',
+    radiografia: 'Radiografías',
+    radiografias: 'Radiografías',
+    radiografía: 'Radiografías',
+    radiografías: 'Radiografías',
+    interconsulta: 'Interconsultas',
+    interconsultas: 'Interconsultas',
+    control: 'Controles',
+    controles: 'Controles',
+    visita: 'Visitas',
+    visitas: 'Visitas',
+    atencion: 'Atenciones',
+    atención: 'Atenciones',
+    atenciones: 'Atenciones'
+  }
+
+  const items = []
+  
+  // Buscar patrones "<cantidad> <concepto>"
+  const regex = /(\d+)\s*(?:de\s+)?([a-záéíóúñ]+)/gi
+  let m
+  while ((m = regex.exec(textWithoutPrices)) !== null) {
+    const qty = parseInt(m[1], 10)
+    const word = m[2].toLowerCase()
+
+    if (MEDICAL_KEYWORDS[word]) {
+      const concepto = MEDICAL_KEYWORDS[word]
+      items.push({
+        cantidad: qty,
+        concepto,
+        precioUnitario: sharedPrice,
+        subtotal: sharedPrice ? (qty * sharedPrice) : null
+      })
+    } else if (word.length >= 3 && !['los', 'las', 'del', 'por', 'con', 'para', 'una', 'uno', 'dias', 'mes', 'año'].includes(word)) {
+      const concepto = word.charAt(0).toUpperCase() + word.slice(1)
+      items.push({
+        cantidad: qty,
+        concepto,
+        precioUnitario: sharedPrice,
+        subtotal: sharedPrice ? (qty * sharedPrice) : null
+      })
+    }
+  }
+
+  if (items.length === 0 && !sharedPrice) return null
+
+  const totalCantidad = items.reduce((acc, it) => acc + it.cantidad, 0)
+  const totalCalculado = items.reduce((acc, it) => acc + (it.subtotal || 0), 0)
+
+  return {
+    rawText: text,
+    items,
+    sharedPrice,
+    totalCantidad,
+    totalCalculado: totalCalculado > 0 ? totalCalculado : (totalCantidad > 0 && sharedPrice ? totalCantidad * sharedPrice : null)
+  }
+}
+
 const BANCOS_ARGENTINA = [
   'Banco de la Nación Argentina (BNA)',
   'Banco de la Provincia de Buenos Aires (BAPRO)',
@@ -1052,6 +1156,12 @@ export default function App() {
     porcentajeRetencion: 5,
     retencionesMed: '',
     netoPagadoMed: '',
+    medicoConsultas: '',
+    medicoPracticas: '',
+    medicoOtrasConcepto: '',
+    medicoOtrasCantidad: '',
+    medicoValorUnitario: '',
+    medicoAutoSync: true,
     // Ingresos Detallados
     ingresosCFL: '',
     ingresosCENS: '',
@@ -1915,6 +2025,117 @@ export default function App() {
     })
   }
 
+  // Sincronizar desglose de prestaciones médicas (consultas, prácticas, etc.) con Detalle Extenso y Bruto
+  const handleSyncMedicoDesglose = (overrides = {}) => {
+    setFormData((prev) => {
+      const c = overrides.medicoConsultas !== undefined ? overrides.medicoConsultas : prev.medicoConsultas
+      const p = overrides.medicoPracticas !== undefined ? overrides.medicoPracticas : prev.medicoPracticas
+      const oConc = overrides.medicoOtrasConcepto !== undefined ? overrides.medicoOtrasConcepto : prev.medicoOtrasConcepto
+      const oQty = overrides.medicoOtrasCantidad !== undefined ? overrides.medicoOtrasCantidad : prev.medicoOtrasCantidad
+      const vUnit = overrides.medicoValorUnitario !== undefined ? overrides.medicoValorUnitario : prev.medicoValorUnitario
+
+      const cNum = parseInt(c, 10) || 0
+      const pNum = parseInt(p, 10) || 0
+      const oNum = parseInt(oQty, 10) || 0
+      const unitNum = parseFloat(vUnit) || 0
+
+      const parts = []
+      if (cNum > 0) parts.push(`${cNum} ${cNum === 1 ? 'consulta' : 'consultas'}`)
+      if (pNum > 0) parts.push(`${pNum} ${pNum === 1 ? 'práctica' : 'prácticas'}`)
+      if (oNum > 0) {
+        const cleanOConc = (oConc || 'otra prestación').trim().toLowerCase()
+        parts.push(`${oNum} ${cleanOConc}`)
+      }
+
+      let generatedText = ''
+      if (parts.length > 0) {
+        generatedText = parts.join(' y ')
+        if (unitNum > 0) {
+          generatedText += ` a $ ${unitNum} c/u`
+        }
+      }
+
+      const totalQty = cNum + pNum + oNum
+      const totalBruto = totalQty * unitNum
+
+      const updated = {
+        ...prev,
+        ...overrides
+      }
+
+      if (generatedText) {
+        updated.detalleExtenso = generatedText
+      }
+
+      if (totalBruto > 0) {
+        updated.pagosMed = totalBruto.toFixed(2)
+        const isAplicar = updated.aplicarRetencion
+        const pct = parseFloat(updated.porcentajeRetencion) || 0
+        if (!isAplicar) {
+          updated.retencionesMed = '0.00'
+          updated.netoPagadoMed = totalBruto.toFixed(2)
+        } else {
+          const ret = totalBruto * (pct / 100)
+          updated.retencionesMed = ret.toFixed(2)
+          updated.netoPagadoMed = (totalBruto - ret).toFixed(2)
+        }
+      }
+
+      return updated
+    })
+  }
+
+  // Detectar y cargar prestaciones desde un texto libre
+  const handleParseAndFillMedico = (rawText) => {
+    const parsed = parseDetalleHonorariosMedicos(rawText)
+    if (!parsed) return
+
+    let c = ''
+    let p = ''
+    let oQty = ''
+    let oConc = ''
+
+    parsed.items.forEach((it) => {
+      if (it.concepto === 'Consultas') {
+        c = String(it.cantidad)
+      } else if (it.concepto === 'Prácticas') {
+        p = String(it.cantidad)
+      } else {
+        oQty = String(it.cantidad)
+        oConc = it.concepto
+      }
+    })
+
+    const unitPrice = parsed.sharedPrice ? String(parsed.sharedPrice) : ''
+
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        medicoConsultas: c,
+        medicoPracticas: p,
+        medicoOtrasConcepto: oConc,
+        medicoOtrasCantidad: oQty,
+        medicoValorUnitario: unitPrice
+      }
+
+      if (parsed.totalCalculado && parsed.totalCalculado > 0) {
+        updated.pagosMed = parsed.totalCalculado.toFixed(2)
+        const isAplicar = updated.aplicarRetencion
+        const pct = parseFloat(updated.porcentajeRetencion) || 0
+        if (!isAplicar) {
+          updated.retencionesMed = '0.00'
+          updated.netoPagadoMed = parsed.totalCalculado.toFixed(2)
+        } else {
+          const ret = parsed.totalCalculado * (pct / 100)
+          updated.retencionesMed = ret.toFixed(2)
+          updated.netoPagadoMed = (parsed.totalCalculado - ret).toFixed(2)
+        }
+      }
+
+      return updated
+    })
+  }
+
   // Close modal and reset form completely
   const handleCloseModal = () => {
     setIsModalOpen(false)
@@ -2001,6 +2222,27 @@ export default function App() {
       parsedMedioPago = 'DEBITO'
     }
 
+    let medC = ''
+    let medP = ''
+    let medOQty = ''
+    let medOConc = ''
+    let medUnit = ''
+
+    if (mov.rubro === 'MÉDICO') {
+      const parsedMed = parseDetalleHonorariosMedicos(mov.detalleExtenso || mov.detalle)
+      if (parsedMed) {
+        parsedMed.items.forEach((it) => {
+          if (it.concepto === 'Consultas') medC = String(it.cantidad)
+          else if (it.concepto === 'Prácticas') medP = String(it.cantidad)
+          else {
+            medOQty = String(it.cantidad)
+            medOConc = it.concepto
+          }
+        })
+        if (parsedMed.sharedPrice) medUnit = String(parsedMed.sharedPrice)
+      }
+    }
+
     setFormData({
       fecha: mov.fecha ? String(mov.fecha).slice(0, 10) : getTodayLocalDate(),
       facturaNro: mov.facturaNro || '',
@@ -2035,6 +2277,12 @@ export default function App() {
       porcentajeRetencion: pctRet,
       retencionesMed: mov.retencionesMed ? String(mov.retencionesMed) : '',
       netoPagadoMed: mov.netoPagadoMed ? String(mov.netoPagadoMed) : '',
+      medicoConsultas: medC,
+      medicoPracticas: medP,
+      medicoOtrasConcepto: medOConc,
+      medicoOtrasCantidad: medOQty,
+      medicoValorUnitario: medUnit,
+      medicoAutoSync: true,
       ingresosCFL: mov.ingresosCFL ? String(mov.ingresosCFL) : '',
       ingresosCENS: mov.ingresosCENS ? String(mov.ingresosCENS) : '',
       ingresosBilleteras: mov.ingresosBilleteras ? String(mov.ingresosBilleteras) : '',
@@ -4414,6 +4662,7 @@ export default function App() {
                         <th className="py-3 px-4">Factura Nº</th>
                         <th className="py-3 px-4">Médico / Profesional</th>
                         <th className="py-3 px-4">Período / Detalle</th>
+                        <th className="py-3 px-4">Desglose / Prestaciones</th>
                         <th className="py-2.5 px-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span>Fecha Pago / Referencia</span>
@@ -4445,7 +4694,33 @@ export default function App() {
                           <td className="py-3 px-4 text-slate-300 whitespace-nowrap group-hover:text-blue-300 transition">{m.fecha}</td>
                           <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap">{m.facturaNro || '-'}</td>
                           <td className="py-3 px-4 text-white font-bold whitespace-nowrap">{m.empresaConcepto}</td>
-                          <td className="py-3 px-4 text-slate-400 max-w-[200px] truncate">{m.detalle || '-'}</td>
+                          <td className="py-3 px-4 text-slate-400 max-w-[180px] truncate">{m.detalle || '-'}</td>
+                          <td className="py-3 px-4">
+                            {(() => {
+                              const parsed = parseDetalleHonorariosMedicos(m.detalleExtenso || m.detalle)
+                              if (!parsed || (!parsed.items.length && !parsed.sharedPrice)) {
+                                return <span className="text-slate-500 italic text-[11px]">-</span>
+                              }
+                              return (
+                                <div className="flex flex-wrap gap-1 items-center max-w-[280px]">
+                                  {parsed.items.map((it, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30 whitespace-nowrap"
+                                    >
+                                      <span className="font-bold text-white">{it.cantidad}</span>
+                                      <span>{it.concepto}</span>
+                                    </span>
+                                  ))}
+                                  {parsed.sharedPrice && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap">
+                                      @ {fmtMoney(parsed.sharedPrice)} c/u
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })()}
+                          </td>
                           <td className="py-3 px-4 text-slate-400 whitespace-nowrap">
                             {m.fechaPago ? (
                               <span>{m.fechaPago} ({m.chequeOperacion || 'OP-TRANSF'})</span>
@@ -5710,11 +5985,24 @@ export default function App() {
                   <label className="text-xs font-semibold text-slate-300 block">
                     Detalle Extenso / Descripción Completa
                   </label>
-                  <span className="text-[10px] text-slate-500 font-mono">Multi-línea</span>
+                  <div className="flex items-center gap-2">
+                    {modalType === 'MEDICO' && formData.detalleExtenso && (
+                      <button
+                        type="button"
+                        onClick={() => handleParseAndFillMedico(formData.detalleExtenso)}
+                        className="text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 transition cursor-pointer"
+                        title="Detectar consultas, prácticas y precio unitario automáticamente desde este texto"
+                      >
+                        <Sparkles className="w-3 h-3 text-blue-400" />
+                        Detectar Prestaciones
+                      </button>
+                    )}
+                    <span className="text-[10px] text-slate-500 font-mono">Multi-línea</span>
+                  </div>
                 </div>
                 <textarea
                   rows={2}
-                  placeholder="Escribe aquí información adicional, número de remito, notas..."
+                  placeholder={modalType === 'MEDICO' ? 'Ej: 21 consulta y 2 práctica a $ 8000 c/u...' : 'Escribe aquí información adicional, número de remito, notas...'}
                   value={formData.detalleExtenso}
                   onChange={(e) => handleInputChange('detalleExtenso', e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 leading-relaxed font-sans"
@@ -5865,7 +6153,133 @@ export default function App() {
               )}
 
               {modalType === 'MEDICO' && (
-                <div className="bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800 space-y-3 sm:space-y-4">
+                <div className="bg-slate-950 p-3.5 sm:p-4 rounded-xl border border-slate-800 space-y-4">
+                  {/* Assistant / Breakdown Engine */}
+                  <div className="bg-slate-900/90 p-3 rounded-lg border border-blue-500/20 space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-blue-400" />
+                        <span className="text-xs font-bold text-white">Desglose de Prestaciones Médicas</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400">
+                        Total Prestaciones:{' '}
+                        <strong className="text-white font-mono">
+                          {(parseInt(formData.medicoConsultas, 10) || 0) +
+                            (parseInt(formData.medicoPracticas, 10) || 0) +
+                            (parseInt(formData.medicoOtrasCantidad, 10) || 0)}
+                        </strong>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div>
+                        <label className="text-[10px] font-semibold text-blue-300 block mb-0.5">
+                          Consultas (Cant.)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Ej: 21"
+                          value={formData.medicoConsultas}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            handleSyncMedicoDesglose({ medicoConsultas: val })
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-semibold text-blue-300 block mb-0.5">
+                          Prácticas (Cant.)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="Ej: 2"
+                          value={formData.medicoPracticas}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            handleSyncMedicoDesglose({ medicoPracticas: val })
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-semibold text-cyan-300 block mb-0.5">
+                          Otras (Cant. / Tipo)
+                        </label>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Cant."
+                            value={formData.medicoOtrasCantidad}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              handleSyncMedicoDesglose({ medicoOtrasCantidad: val })
+                            }}
+                            className="w-14 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Ej: ecografías"
+                            value={formData.medicoOtrasConcepto}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              handleSyncMedicoDesglose({ medicoOtrasConcepto: val })
+                            }}
+                            className="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-semibold text-amber-300 block mb-0.5">
+                          Valor Unitario ($ c/u)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Ej: 8000"
+                          value={formData.medicoValorUnitario}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            handleSyncMedicoDesglose({ medicoValorUnitario: val })
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    {((parseInt(formData.medicoConsultas, 10) || 0) +
+                      (parseInt(formData.medicoPracticas, 10) || 0) +
+                      (parseInt(formData.medicoOtrasCantidad, 10) || 0) > 0 &&
+                      parseFloat(formData.medicoValorUnitario) > 0) && (
+                      <div className="pt-1 flex items-center justify-between text-[11px] bg-slate-950/70 px-2.5 py-1 rounded border border-slate-800">
+                        <span className="text-slate-400">
+                          Cálculo:{' '}
+                          <strong className="text-slate-200">
+                            {(parseInt(formData.medicoConsultas, 10) || 0) +
+                              (parseInt(formData.medicoPracticas, 10) || 0) +
+                              (parseInt(formData.medicoOtrasCantidad, 10) || 0)}{' '}
+                            prestaciones × {fmtMoney(formData.medicoValorUnitario)}
+                          </strong>
+                        </span>
+                        <span className="font-mono font-bold text-emerald-400">
+                          Subtotal: {fmtMoney(
+                            ((parseInt(formData.medicoConsultas, 10) || 0) +
+                              (parseInt(formData.medicoPracticas, 10) || 0) +
+                              (parseInt(formData.medicoOtrasCantidad, 10) || 0)) *
+                              (parseFloat(formData.medicoValorUnitario) || 0)
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <input
