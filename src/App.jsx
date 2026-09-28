@@ -883,14 +883,23 @@ export default function App() {
 
     // Persistir en Supabase
     try {
-      await supabase.from('periodos').upsert([
-        {
-          nombre: formattedPeriod,
+      const { data: existing } = await supabase.from('periodos').select('id').eq('nombre', formattedPeriod)
+      if (existing && existing.length > 0) {
+        await supabase.from('periodos').update({
           anio: newPeriodYear,
           mes: newPeriodMonth.toUpperCase(),
           activo: true
-        }
-      ], { onConflict: 'nombre' })
+        }).eq('nombre', formattedPeriod)
+      } else {
+        await supabase.from('periodos').insert([
+          {
+            nombre: formattedPeriod,
+            anio: newPeriodYear,
+            mes: newPeriodMonth.toUpperCase(),
+            activo: true
+          }
+        ])
+      }
     } catch (err) {
       console.error('Error guardando período en Supabase:', err)
     }
@@ -1046,9 +1055,10 @@ export default function App() {
 
     // Persistir en Supabase
     try {
-      await supabase.from('maestros').upsert([
+      await supabase.from('maestros').delete().match({ categoria: catalogKey, nombre: trimmed })
+      await supabase.from('maestros').insert([
         { categoria: catalogKey, nombre: trimmed, cuit: trimmedCuit || null, activo: true }
-      ], { onConflict: 'categoria,nombre' })
+      ])
     } catch (err) {
       console.error('Error guardando en maestros en Supabase:', err)
     }
@@ -1080,14 +1090,15 @@ export default function App() {
 
     // Persistir categoría permanentemente en Supabase
     try {
-      await supabase.from('maestros').upsert([
+      await supabase.from('maestros').delete().match({ categoria: key, nombre: '__CATEGORY_HEADER__' })
+      await supabase.from('maestros').insert([
         {
           categoria: key,
           nombre: '__CATEGORY_HEADER__',
           cuit: trimmed,
           activo: true
         }
-      ], { onConflict: 'categoria,nombre' })
+      ])
     } catch (err) {
       console.error('Error guardando categoría en Supabase:', err)
     }
@@ -1247,9 +1258,10 @@ export default function App() {
     }
 
     try {
-      await supabase.from('maestros').upsert([
+      await supabase.from('maestros').delete().match({ categoria: cat, nombre: trimmedEntity })
+      await supabase.from('maestros').insert([
         { categoria: cat, nombre: trimmedEntity, cuit: trimmedCuit || null, activo: true }
-      ], { onConflict: 'categoria,nombre' })
+      ])
     } catch (err) {
       console.error('Error guardando CUIT en Supabase:', err)
     }
