@@ -135,6 +135,72 @@ export const formatDateDMY = (dateStr) => {
   return str
 }
 
+// Helpers para compatibilidad fiscal y metadatos sin depender estrictamente de columnas DDL
+const TAX_TAG_REGEX = /\[TAX_METADATA:(.*?)\]/
+
+const encodeTaxMetadata = (observaciones, taxObj) => {
+  const baseObs = (observaciones || '').replace(TAX_TAG_REGEX, '').trim()
+  if (!taxObj || typeof taxObj !== 'object') return baseObs || null
+  const cleanTax = {
+    tipo: taxObj.tipoComprobante || 'FACTURA_B',
+    neto: Number(taxObj.netoGravado || 0),
+    alic: Number(taxObj.alicuotaIva || 0),
+    iva: Number(taxObj.ivaImporte || 0),
+    noGrav: Number(taxObj.ivaNoGravado || 0),
+    perc: Number(taxObj.percepciones || 0)
+  }
+  const tag = `[TAX_METADATA:${JSON.stringify(cleanTax)}]`
+  return baseObs ? `${baseObs} ${tag}` : tag
+}
+
+const decodeTaxMetadata = (rawObservaciones, rawMov = {}) => {
+  let tax = {
+    tipoComprobante: rawMov.tipo_comprobante || (rawMov.rubro === 'MÉDICO' ? 'FACTURA_C' : rawMov.rubro === 'INGRESOS' ? 'RECIBO' : 'FACTURA_B'),
+    netoGravado: rawMov.neto_gravado != null ? Number(rawMov.neto_gravado) : null,
+    alicuotaIva: rawMov.alicuota_iva != null ? Number(rawMov.alicuota_iva) : 21,
+    ivaImporte: rawMov.iva_importe != null ? Number(rawMov.iva_importe) : null,
+    ivaNoGravado: rawMov.iva_no_gravado != null ? Number(rawMov.iva_no_gravado) : 0,
+    percepciones: rawMov.percepciones != null ? Number(rawMov.percepciones) : 0,
+    cleanObservaciones: rawObservaciones || ''
+  }
+
+  if (rawObservaciones && TAX_TAG_REGEX.test(rawObservaciones)) {
+    try {
+      const match = rawObservaciones.match(TAX_TAG_REGEX)
+      if (match && match[1]) {
+        const parsed = JSON.parse(match[1])
+        tax.tipoComprobante = parsed.tipo || tax.tipoComprobante
+        tax.netoGravado = parsed.neto != null ? Number(parsed.neto) : tax.netoGravado
+        tax.alicuotaIva = parsed.alic != null ? Number(parsed.alic) : tax.alicuotaIva
+        tax.ivaImporte = parsed.iva != null ? Number(parsed.iva) : tax.ivaImporte
+        tax.ivaNoGravado = parsed.noGrav != null ? Number(parsed.noGrav) : tax.ivaNoGravado
+        tax.percepciones = parsed.perc != null ? Number(parsed.perc) : tax.percepciones
+      }
+    } catch (e) {
+      console.error('Error parseando metadatos fiscales:', e)
+    }
+    tax.cleanObservaciones = rawObservaciones.replace(TAX_TAG_REGEX, '').trim()
+  }
+
+  return tax
+}
+
+const getPeriodFromDate = (dateStr, availablePeriods = []) => {
+  if (!dateStr) return ''
+  const d = new Date(dateStr + 'T12:00:00')
+  if (isNaN(d.getTime())) return ''
+  const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
+  const mName = months[d.getMonth()]
+  const shortYear = String(d.getFullYear()).slice(-2)
+  const candidate = `${mName} ${shortYear}`
+  if (availablePeriods.includes(candidate)) return candidate
+  if (mName === 'SETIEMBRE') {
+    const candidate2 = `SEPTIEMBRE ${shortYear}`
+    if (availablePeriods.includes(candidate2)) return candidate2
+  }
+  return candidate
+}
+
 /**
  * Parser inteligente de prestaciones médicas en Detalle Extenso (ej: "21 consulta y 2 práctica a $ 8000 c/u" o "21 consultas a $8000 y 2 prácticas a $12000")
  */
@@ -785,46 +851,58 @@ export default function App() {
         }
       }
 
-      // 3. Cargar Movimientos
-      const { data: dbMovimientos } = await supabase
+      // 3. Cargar Movimientos (con paginación amplia para superar el límite de 1000 de Supabase)
+      const { data: dbMovimientos, error: errMovs } = await supabase
         .from('movimientos')
         .select('*')
+        .range(0, 49999)
         .order('fecha', { ascending: false })
 
-      if (dbMovimientos && dbMovimientos.length > 0) {
-        const mapped = dbMovimientos.map((m) => ({
-          id: m.id,
-          fecha: m.fecha,
-          facturaNro: m.factura_nro || '',
-          rubro: m.rubro,
-          empresaConcepto: m.empresa_concepto,
-          detalle: m.detalle || '',
-          detalleExtenso: m.detalle_extenso || '',
-          realizadoEn: m.realizado_en || '',
-          fechaPago: m.fecha_pago || '',
-          chequeOperacion: m.cheque_operacion || '',
-          mesPeriodo: m.mes_periodo || '',
-          pagosS: Number(m.pagos_s || 0),
-          ingresosS: Number(m.ingresos_s || 0),
-          pagosMed: Number(m.pagos_med || 0),
-          retencionesMed: Number(m.retenciones_med || 0),
-          netoPagadoMed: Number(m.neto_pagado_med || 0),
-          ingresosCFL: Number(m.ingresos_cfl || 0),
-          ingresosCENS: Number(m.ingresos_cens || 0),
-          ingresosBilleteras: Number(m.ingresos_billeteras || 0),
-          alquilerCpoSalon: Number(m.alquiler_cpo_salon || 0),
-          ventaCantina: Number(m.venta_cantina || 0),
-          usoNatatorio: Number(m.uso_natatorio || 0),
-          alquiConsultorios: Number(m.alqui_consultorios || 0),
-          practicas: Number(m.practicas || 0),
-          consultas: Number(m.consultas || 0),
-          enfermeria: Number(m.enfermeria || 0),
-          odontologia: Number(m.odontologia || 0),
-          otIngresos: Number(m.ot_ingresos || 0),
-          compensaciones: Number(m.compensaciones || 0),
-          total: Number(m.total || 0),
-          observaciones: m.observaciones || ''
-        }))
+      if (errMovs) {
+        console.error('Error cargando movimientos de Supabase:', errMovs.message)
+      } else if (dbMovimientos && dbMovimientos.length > 0) {
+        const mapped = dbMovimientos.map((m) => {
+          const taxInfo = decodeTaxMetadata(m.observaciones, m)
+          return {
+            id: m.id,
+            fecha: m.fecha,
+            facturaNro: m.factura_nro || '',
+            tipoComprobante: taxInfo.tipoComprobante,
+            netoGravado: taxInfo.netoGravado,
+            alicuotaIva: taxInfo.alicuotaIva,
+            ivaImporte: taxInfo.ivaImporte,
+            ivaNoGravado: taxInfo.ivaNoGravado,
+            percepciones: taxInfo.percepciones,
+            rubro: m.rubro,
+            empresaConcepto: m.empresa_concepto,
+            detalle: m.detalle || '',
+            detalleExtenso: m.detalle_extenso || '',
+            realizadoEn: m.realizado_en || '',
+            fechaPago: m.fecha_pago || '',
+            chequeOperacion: m.cheque_operacion || '',
+            mesPeriodo: m.mes_periodo || '',
+            pagosS: Number(m.pagos_s || 0),
+            ingresosS: Number(m.ingresos_s || 0),
+            pagosMed: Number(m.pagos_med || 0),
+            retencionesMed: Number(m.retenciones_med || 0),
+            netoPagadoMed: Number(m.neto_pagado_med || 0),
+            ingresosCFL: Number(m.ingresos_cfl || 0),
+            ingresosCENS: Number(m.ingresos_cens || 0),
+            ingresosBilleteras: Number(m.ingresos_billeteras || 0),
+            alquilerCpoSalon: Number(m.alquiler_cpo_salon || 0),
+            ventaCantina: Number(m.venta_cantina || 0),
+            usoNatatorio: Number(m.uso_natatorio || 0),
+            alquiConsultorios: Number(m.alqui_consultorios || 0),
+            practicas: Number(m.practicas || 0),
+            consultas: Number(m.consultas || 0),
+            enfermeria: Number(m.enfermeria || 0),
+            odontologia: Number(m.odontologia || 0),
+            otIngresos: Number(m.ot_ingresos || 0),
+            compensaciones: Number(m.compensaciones || 0),
+            total: Number(m.total || 0),
+            observaciones: taxInfo.cleanObservaciones
+          }
+        })
         setMovimientos(mapped)
       }
     } catch (err) {
@@ -1303,75 +1381,79 @@ export default function App() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   
   // Helper to obtain a fresh, blank form state for any modal type
-  const getCleanFormData = useCallback((type = 'EGRESO') => ({
-    fecha: getTodayLocalDate(),
-    facturaNro: '',
-    rubro: type === 'MEDICO' ? 'MÉDICO' : type === 'INGRESO' ? 'INGRESOS' : 'PROVEEDOR',
-    empresaConcepto: '',
-    detalle: '',
-    detalleExtenso: '',
-    realizadoEn: 'Policlinica AMOS',
-    fechaPago: '',
-    chequeOperacion: '',
-    // Medio de Pago y Cheques
-    medioPagoTipo: 'TRANSFERENCIA', // 'TRANSFERENCIA' | 'CHEQUE' | 'EFECTIVO' | 'DEBITO' | 'OTRO'
-    chequeTipo: 'PROPIO', // 'PROPIO' | 'TERCERO'
-    chequeFormato: 'FISICO', // 'FISICO' | 'ECHEQ'
-    chequeNumero: '',
-    chequeBanco: '',
-    chequeFechaCobro: '',
-    chequeEmisor: '',
-    chequeTitular: '',
-    chequeCuit: '',
-    chequeCruzado: false,
-    chequeNoALaOrden: false,
-    // Desglose Fiscal e IVA (Libro IVA Compras)
-    tipoComprobante: type === 'MEDICO' ? 'FACTURA_C' : type === 'INGRESO' ? 'RECIBO' : 'FACTURA_B',
-    netoGravado: '',
-    alicuotaIva: 21,
-    ivaImporte: '',
-    ivaNoGravado: '',
-    percepciones: '',
-    // Egresos
-    pagosS: '',
-    // Medicos
-    pagosMed: '',
-    aplicarRetencion: true,
-    porcentajeRetencion: 5,
-    retencionesMed: '',
-    netoPagadoMed: '',
-    medicoConsultasCant: '',
-    medicoConsultasValor: '',
-    medicoPracticasCant: '',
-    medicoPracticasValor: '',
-    medicoEcografiasCant: '',
-    medicoEcografiasValor: '',
-    medicoCirugiasCant: '',
-    medicoCirugiasValor: '',
-    medicoGuardiasCant: '',
-    medicoGuardiasValor: '',
-    medicoInformesCant: '',
-    medicoInformesValor: '',
-    medicoOtrasConcepto: '',
-    medicoOtrasCantidad: '',
-    medicoOtrasValor: '',
-    medicoValorGlobal: '',
-    // Ingresos Detallados
-    ingresosCFL: '',
-    ingresosCENS: '',
-    ingresosBilleteras: '',
-    alquiConsultorios: '',
-    alquilerCpoSalon: '',
-    ventaCantina: '',
-    usoNatatorio: '',
-    practicas: '',
-    consultas: '',
-    enfermeria: '',
-    odontologia: '',
-    otIngresos: '',
-    compensaciones: '',
-    observaciones: ''
-  }), [])
+  const getCleanFormData = useCallback((type = 'EGRESO') => {
+    const today = getTodayLocalDate()
+    return {
+      fecha: today,
+      mesPeriodo: getPeriodFromDate(today, meses) || selectedMes || 'OCTUBRE 26',
+      facturaNro: '',
+      rubro: type === 'MEDICO' ? 'MÉDICO' : type === 'INGRESO' ? 'INGRESOS' : 'PROVEEDOR',
+      empresaConcepto: '',
+      detalle: '',
+      detalleExtenso: '',
+      realizadoEn: 'Policlinica AMOS',
+      fechaPago: '',
+      chequeOperacion: '',
+      // Medio de Pago y Cheques
+      medioPagoTipo: 'TRANSFERENCIA', // 'TRANSFERENCIA' | 'CHEQUE' | 'EFECTIVO' | 'DEBITO' | 'OTRO'
+      chequeTipo: 'PROPIO', // 'PROPIO' | 'TERCERO'
+      chequeFormato: 'FISICO', // 'FISICO' | 'ECHEQ'
+      chequeNumero: '',
+      chequeBanco: '',
+      chequeFechaCobro: '',
+      chequeEmisor: '',
+      chequeTitular: '',
+      chequeCuit: '',
+      chequeCruzado: false,
+      chequeNoALaOrden: false,
+      // Desglose Fiscal e IVA (Libro IVA Compras)
+      tipoComprobante: type === 'MEDICO' ? 'FACTURA_C' : type === 'INGRESO' ? 'RECIBO' : 'FACTURA_B',
+      netoGravado: '',
+      alicuotaIva: 21,
+      ivaImporte: '',
+      ivaNoGravado: '',
+      percepciones: '',
+      // Egresos
+      pagosS: '',
+      // Medicos
+      pagosMed: '',
+      aplicarRetencion: true,
+      porcentajeRetencion: 5,
+      retencionesMed: '',
+      netoPagadoMed: '',
+      medicoConsultasCant: '',
+      medicoConsultasValor: '',
+      medicoPracticasCant: '',
+      medicoPracticasValor: '',
+      medicoEcografiasCant: '',
+      medicoEcografiasValor: '',
+      medicoCirugiasCant: '',
+      medicoCirugiasValor: '',
+      medicoGuardiasCant: '',
+      medicoGuardiasValor: '',
+      medicoInformesCant: '',
+      medicoInformesValor: '',
+      medicoOtrasConcepto: '',
+      medicoOtrasCantidad: '',
+      medicoOtrasValor: '',
+      medicoValorGlobal: '',
+      // Ingresos Detallados
+      ingresosCFL: '',
+      ingresosCENS: '',
+      ingresosBilleteras: '',
+      alquiConsultorios: '',
+      alquilerCpoSalon: '',
+      ventaCantina: '',
+      usoNatatorio: '',
+      practicas: '',
+      consultas: '',
+      enfermeria: '',
+      odontologia: '',
+      otIngresos: '',
+      compensaciones: '',
+      observaciones: ''
+    }
+  }, [meses, selectedMes])
 
   // Form State (siempre limpio)
   const [formData, setFormData] = useState(() => getCleanFormData('EGRESO'))
@@ -2241,6 +2323,13 @@ export default function App() {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value }
 
+      if (field === 'fecha' && !editingId) {
+        const autoPeriod = getPeriodFromDate(value, meses)
+        if (autoPeriod) {
+          updated.mesPeriodo = autoPeriod
+        }
+      }
+
       if (field === 'pagosMed' || field === 'aplicarRetencion' || field === 'porcentajeRetencion') {
         const bruto = parseFloat(field === 'pagosMed' ? value : prev.pagosMed) || 0
         const isAplicar = field === 'aplicarRetencion' ? value : prev.aplicarRetencion
@@ -2601,6 +2690,7 @@ export default function App() {
 
     setFormData({
       fecha: mov.fecha ? String(mov.fecha).slice(0, 10) : getTodayLocalDate(),
+      mesPeriodo: mov.mesPeriodo || getPeriodFromDate(mov.fecha, meses) || selectedMes,
       facturaNro: mov.facturaNro || '',
       rubro: mov.rubro || 'PROVEEDOR',
       empresaConcepto: mov.empresaConcepto || '',
@@ -2861,6 +2951,16 @@ export default function App() {
     if (editingId) {
       // 1. MODO EDICIÓN / MODIFICAR
       const currentMov = movimientos.find((m) => m.id === editingId) || {}
+      const assignedPeriod = formData.mesPeriodo || currentMov.mesPeriodo || selectedMes
+      const encodedObs = encodeTaxMetadata(formData.observaciones, {
+        tipoComprobante: formData.tipoComprobante,
+        netoGravado: formData.netoGravado,
+        alicuotaIva: formData.alicuotaIva,
+        ivaImporte: formData.ivaImporte,
+        ivaNoGravado: formData.ivaNoGravado,
+        percepciones: formData.percepciones
+      })
+
       const updatedMov = {
         ...currentMov,
         fecha: formData.fecha,
@@ -2878,6 +2978,7 @@ export default function App() {
         realizadoEn: formData.realizadoEn || 'Policlinica AMOS',
         fechaPago: formData.fechaPago || null,
         chequeOperacion: computedChequeRef || null,
+        mesPeriodo: assignedPeriod,
         pagosS: modalType === 'EGRESO' ? Number(formData.pagosS || 0) : 0,
         pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
         retencionesMed: modalType === 'MEDICO' ? Number(formData.retencionesMed || 0) : 0,
@@ -2896,57 +2997,68 @@ export default function App() {
         otIngresos: Number(formData.otIngresos || 0),
         compensaciones: Number(formData.compensaciones || 0),
         total: totalIngresosCalculado,
-        observaciones: formData.observaciones
+        observaciones: formData.observaciones || ''
       }
 
       setMovimientos((prev) => prev.map((m) => (m.id === editingId ? updatedMov : m)))
       handleCloseModal()
 
       try {
+        const updatePayload = {
+          fecha: updatedMov.fecha,
+          factura_nro: updatedMov.facturaNro || null,
+          rubro: updatedMov.rubro,
+          empresa_concepto: updatedMov.empresaConcepto,
+          detalle: updatedMov.detalle || null,
+          detalle_extenso: updatedMov.detalleExtenso || null,
+          realizado_en: updatedMov.realizadoEn || null,
+          fecha_pago: updatedMov.fechaPago || null,
+          cheque_operacion: updatedMov.chequeOperacion || null,
+          mes_periodo: updatedMov.mesPeriodo || null,
+          pagos_s: updatedMov.pagosS,
+          ingresos_s: updatedMov.ingresosS || 0,
+          pagos_med: updatedMov.pagosMed,
+          retenciones_med: updatedMov.retencionesMed,
+          neto_pagado_med: updatedMov.netoPagadoMed,
+          alquiler_cpo_salon: updatedMov.alquilerCpoSalon,
+          venta_cantina: updatedMov.ventaCantina,
+          uso_natatorio: updatedMov.usoNatatorio,
+          alqui_consultorios: updatedMov.alquiConsultorios,
+          practicas: updatedMov.practicas,
+          consultas: updatedMov.consultas,
+          enfermeria: updatedMov.enfermeria,
+          odontologia: updatedMov.odontologia,
+          ot_ingresos: updatedMov.otIngresos,
+          compensaciones: updatedMov.compensaciones,
+          total: updatedMov.total,
+          observaciones: encodedObs
+        }
+
         const { error } = await supabase
           .from('movimientos')
-          .update({
-            fecha: updatedMov.fecha,
-            factura_nro: updatedMov.facturaNro || null,
-            tipo_comprobante: updatedMov.tipoComprobante,
-            neto_gravado: updatedMov.netoGravado,
-            alicuota_iva: updatedMov.alicuotaIva,
-            iva_importe: updatedMov.ivaImporte,
-            iva_no_gravado: updatedMov.ivaNoGravado,
-            percepciones: updatedMov.percepciones,
-            rubro: updatedMov.rubro,
-            empresa_concepto: updatedMov.empresaConcepto,
-            detalle: updatedMov.detalle || null,
-            detalle_extenso: updatedMov.detalleExtenso || null,
-            realizado_en: updatedMov.realizadoEn || null,
-            fecha_pago: updatedMov.fechaPago || null,
-            cheque_operacion: updatedMov.chequeOperacion || null,
-            pagos_s: updatedMov.pagosS,
-            ingresos_s: updatedMov.ingresosS || 0,
-            pagos_med: updatedMov.pagosMed,
-            retenciones_med: updatedMov.retencionesMed,
-            neto_pagado_med: updatedMov.netoPagadoMed,
-            alquiler_cpo_salon: updatedMov.alquilerCpoSalon,
-            venta_cantina: updatedMov.ventaCantina,
-            uso_natatorio: updatedMov.usoNatatorio,
-            alqui_consultorios: updatedMov.alquiConsultorios,
-            practicas: updatedMov.practicas,
-            consultas: updatedMov.consultas,
-            enfermeria: updatedMov.enfermeria,
-            odontologia: updatedMov.odontologia,
-            ot_ingresos: updatedMov.otIngresos,
-            compensaciones: updatedMov.compensaciones,
-            total: updatedMov.total,
-            observaciones: updatedMov.observaciones || null
-          })
+          .update(updatePayload)
           .eq('id', editingId)
 
-        if (error) console.error('Error actualizando movimiento en Supabase:', error.message)
+        if (error) {
+          console.error('Error actualizando movimiento en Supabase:', error.message)
+          alert(`⚠️ No se pudo guardar la modificación en la base de datos Supabase: ${error.message}`)
+        }
       } catch (err) {
         console.error('Error enviando actualización a Supabase:', err)
+        alert(`⚠️ Error de conexión al actualizar en Supabase: ${err.message}`)
       }
     } else {
       // 2. MODO CREACIÓN
+      const assignedPeriod = formData.mesPeriodo || getPeriodFromDate(formData.fecha, meses) || selectedMes
+      const encodedObs = encodeTaxMetadata(formData.observaciones, {
+        tipoComprobante: formData.tipoComprobante,
+        netoGravado: formData.netoGravado,
+        alicuotaIva: formData.alicuotaIva,
+        ivaImporte: formData.ivaImporte,
+        ivaNoGravado: formData.ivaNoGravado,
+        percepciones: formData.percepciones
+      })
+
       const newMov = {
         id: 'mov-' + Date.now(),
         fecha: formData.fecha,
@@ -2964,7 +3076,7 @@ export default function App() {
         realizadoEn: formData.realizadoEn || 'Policlinica AMOS',
         fechaPago: formData.fechaPago || null,
         chequeOperacion: computedChequeRef || null,
-        mesPeriodo: selectedMes,
+        mesPeriodo: assignedPeriod,
         pagosS: modalType === 'EGRESO' ? Number(formData.pagosS || 0) : 0,
         pagosMed: modalType === 'MEDICO' ? Number(formData.pagosMed || 0) : 0,
         retencionesMed: modalType === 'MEDICO' ? Number(formData.retencionesMed || 0) : 0,
@@ -2983,56 +3095,51 @@ export default function App() {
         otIngresos: Number(formData.otIngresos || 0),
         compensaciones: Number(formData.compensaciones || 0),
         total: totalIngresosCalculado,
-        observaciones: formData.observaciones
+        observaciones: formData.observaciones || ''
       }
 
       setMovimientos([newMov, ...movimientos])
       handleCloseModal()
 
       try {
+        const insertPayload = {
+          fecha: newMov.fecha,
+          factura_nro: newMov.facturaNro || null,
+          rubro: newMov.rubro,
+          empresa_concepto: newMov.empresaConcepto,
+          detalle: newMov.detalle || null,
+          detalle_extenso: newMov.detalleExtenso || null,
+          realizado_en: newMov.realizadoEn || null,
+          fecha_pago: newMov.fechaPago || null,
+          cheque_operacion: newMov.chequeOperacion || null,
+          mes_periodo: newMov.mesPeriodo || null,
+          pagos_s: newMov.pagosS,
+          ingresos_s: newMov.ingresosS || 0,
+          pagos_med: newMov.pagosMed,
+          retenciones_med: newMov.retencionesMed,
+          neto_pagado_med: newMov.netoPagadoMed,
+          alquiler_cpo_salon: newMov.alquilerCpoSalon,
+          venta_cantina: newMov.ventaCantina,
+          uso_natatorio: newMov.usoNatatorio,
+          alqui_consultorios: newMov.alquiConsultorios,
+          practicas: newMov.practicas,
+          consultas: newMov.consultas,
+          enfermeria: newMov.enfermeria,
+          odontologia: newMov.odontologia,
+          ot_ingresos: newMov.otIngresos,
+          compensaciones: newMov.compensaciones,
+          total: newMov.total,
+          observaciones: encodedObs
+        }
+
         const { data: insertedData, error } = await supabase
           .from('movimientos')
-          .insert([
-            {
-              fecha: newMov.fecha,
-              factura_nro: newMov.facturaNro || null,
-              tipo_comprobante: newMov.tipoComprobante,
-              neto_gravado: newMov.netoGravado,
-              alicuota_iva: newMov.alicuotaIva,
-              iva_importe: newMov.ivaImporte,
-              iva_no_gravado: newMov.ivaNoGravado,
-              percepciones: newMov.percepciones,
-              rubro: newMov.rubro,
-              empresa_concepto: newMov.empresaConcepto,
-              detalle: newMov.detalle || null,
-              detalle_extenso: newMov.detalleExtenso || null,
-              realizado_en: newMov.realizadoEn || null,
-              fecha_pago: newMov.fechaPago || null,
-              cheque_operacion: newMov.chequeOperacion || null,
-              mes_periodo: newMov.mesPeriodo || null,
-              pagos_s: newMov.pagosS,
-              ingresos_s: newMov.ingresosS || 0,
-              pagos_med: newMov.pagosMed,
-              retenciones_med: newMov.retencionesMed,
-              neto_pagado_med: newMov.netoPagadoMed,
-              alquiler_cpo_salon: newMov.alquilerCpoSalon,
-              venta_cantina: newMov.ventaCantina,
-              uso_natatorio: newMov.usoNatatorio,
-              alqui_consultorios: newMov.alquiConsultorios,
-              practicas: newMov.practicas,
-              consultas: newMov.consultas,
-              enfermeria: newMov.enfermeria,
-              odontologia: newMov.odontologia,
-              ot_ingresos: newMov.otIngresos,
-              compensaciones: newMov.compensaciones,
-              total: newMov.total,
-              observaciones: newMov.observaciones || null
-            }
-          ])
+          .insert([insertPayload])
           .select()
 
         if (error) {
           console.error('Error insertando movimiento en Supabase:', error.message)
+          alert(`⚠️ No se pudo guardar el comprobante en Supabase: ${error.message}. Por favor verifique la conexión.`)
         } else if (insertedData && insertedData[0]?.id) {
           // Reemplazar id provisional con el UUID generado por Supabase
           setMovimientos((prev) =>
@@ -3041,6 +3148,7 @@ export default function App() {
         }
       } catch (err) {
         console.error('Error enviando movimiento a Supabase:', err)
+        alert(`⚠️ Error de red al guardar en Supabase: ${err.message}`)
       }
     }
   }
@@ -3177,10 +3285,9 @@ export default function App() {
 
     try {
       if (supabase) {
-        await supabase.from('movimientos').insert([{
-          id: newMov.id,
+        const { data: insertedChq, error: errChq } = await supabase.from('movimientos').insert([{
           fecha: newMov.fecha,
-          factura_nro: newMov.facturaNro,
+          factura_nro: newMov.facturaNro || null,
           rubro: newMov.rubro,
           empresa_concepto: newMov.empresaConcepto,
           detalle: newMov.detalle,
@@ -3192,7 +3299,16 @@ export default function App() {
           total: newMov.total,
           ingresos_s: newMov.ingresosS,
           observaciones: newMov.observaciones
-        }])
+        }]).select()
+
+        if (errChq) {
+          console.error('Error guardando cheque en Supabase:', errChq.message)
+        } else if (insertedChq && insertedChq[0]?.id) {
+          newMov.id = insertedChq[0].id
+          setMovimientos((prev) =>
+            prev.map((m) => (m.id === newMov.id ? { ...m, id: insertedChq[0].id } : m))
+          )
+        }
       }
     } catch (err) {
       console.error('Error guardando cheque en Supabase:', err)
@@ -5873,9 +5989,20 @@ export default function App() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400">
-                    {editingId ? `Editando registro existente` : `Período: ${selectedMes}`}
-                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-slate-400 font-medium">Período contable:</span>
+                    <select
+                      value={formData.mesPeriodo || selectedMes}
+                      onChange={(e) => handleInputChange('mesPeriodo', e.target.value)}
+                      className="bg-slate-950 border border-slate-750 rounded px-2 py-0.5 text-xs text-blue-300 font-bold focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      {meses.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
               <button
