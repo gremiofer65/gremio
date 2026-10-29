@@ -825,6 +825,10 @@ export default function App() {
             if (ent && c) cuitMap[ent] = c
             return
           }
+          if (item.categoria.startsWith('__CAJA_')) {
+            // Ignorar registros internos de sincronización de Caja Diaria
+            return
+          }
           if (!grouped[item.categoria]) grouped[item.categoria] = []
           if (item.nombre.startsWith('__CAT_LABEL__:')) {
             dynamicLabels[item.categoria] = item.nombre.replace('__CAT_LABEL__:', '')

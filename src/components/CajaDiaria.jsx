@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Calendar,
@@ -30,7 +30,10 @@ import {
   Layers,
   FileText,
   ArrowDownCircle,
-  CreditCard
+  CreditCard,
+  Cloud,
+  CloudCheck,
+  RefreshCw
 } from 'lucide-react'
 
 const formatDateDMY = (dateStr) => {
@@ -232,6 +235,187 @@ export default function CajaDiaria({
     }
   }, [cajasData])
 
+  // Estado de sincronización en tiempo real con Supabase
+  const [syncStatus, setSyncStatus] = useState('idle') // 'idle' | 'syncing' | 'saved' | 'error'
+  const saveTimeoutsRef = useRef({})
+  const syncPendingRef = useRef(new Map())
+  const isRemoteUpdateRef = useRef(false)
+
+  // Guardar una jornada específica en Supabase (particionado en chunks en tabla 'maestros' para sincronización multi-usuario)
+  const saveDayToSupabase = useCallback(
+    async (date, record) => {
+      if (!supabase || !date || !record) return
+      try {
+        setSyncStatus('syncing')
+        const json = JSON.stringify(record)
+        const chunkSize = 180
+        const chunks = []
+        for (let i = 0; i < json.length; i += chunkSize) {
+          chunks.push(json.slice(i, i + chunkSize))
+        }
+
+        // 1. Borrar chunks anteriores de esta fecha en Supabase
+        await supabase
+          .from('maestros')
+          .delete()
+          .eq('categoria', '__CAJA_DATA__')
+          .like('nombre', `${date}__%`)
+
+        // 2. Insertar nuevos chunks
+        const rows = chunks.map((chunk, idx) => ({
+          categoria: '__CAJA_DATA__',
+          nombre: `${date}__${String(idx).padStart(3, '0')}__${String(chunks.length).padStart(3, '0')}__${chunk}`,
+          activo: true
+        }))
+
+        const { error } = await supabase.from('maestros').insert(rows)
+        if (error) {
+          console.error('Error guardando jornada de caja en Supabase:', error.message)
+          setSyncStatus('error')
+        } else {
+          setSyncStatus('saved')
+          setTimeout(() => setSyncStatus('idle'), 2500)
+        }
+      } catch (err) {
+        console.error('Error en saveDayToSupabase:', err)
+        setSyncStatus('error')
+      }
+    },
+    [supabase]
+  )
+
+  // Desencadenar guardado con debounce de 600ms
+  const scheduleSaveToSupabase = useCallback(
+    (date, record) => {
+      if (!supabase || !date) return
+      syncPendingRef.current.set(date, record)
+      setSyncStatus('syncing')
+
+      if (saveTimeoutsRef.current[date]) {
+        clearTimeout(saveTimeoutsRef.current[date])
+      }
+
+      saveTimeoutsRef.current[date] = setTimeout(async () => {
+        delete saveTimeoutsRef.current[date]
+        const toSave = syncPendingRef.current.get(date)
+        if (toSave) {
+          syncPendingRef.current.delete(date)
+          await saveDayToSupabase(date, toSave)
+        }
+      }, 600)
+    },
+    [supabase, saveDayToSupabase]
+  )
+
+  // Forzar guardado inmediato (por ejemplo, en onBlur del input de Saldo Inicial)
+  const flushSaveToSupabase = useCallback(
+    async (date, recordToSave = null) => {
+      if (!supabase || !date) return
+      if (saveTimeoutsRef.current[date]) {
+        clearTimeout(saveTimeoutsRef.current[date])
+        delete saveTimeoutsRef.current[date]
+      }
+      const record = recordToSave || syncPendingRef.current.get(date) || cajasData[date]
+      syncPendingRef.current.delete(date)
+      if (record) {
+        await saveDayToSupabase(date, record)
+      }
+    },
+    [supabase, cajasData, saveDayToSupabase]
+  )
+
+  // Cargar jornadas desde Supabase y sincronizar con localStorage
+  const loadCajasFromSupabase = useCallback(async () => {
+    if (!supabase) return
+    try {
+      const { data, error } = await supabase
+        .from('maestros')
+        .select('*')
+        .eq('categoria', '__CAJA_DATA__')
+
+      if (error) {
+        console.error('Error cargando caja diaria de Supabase:', error.message)
+        return
+      }
+
+      // Si Supabase aún no tiene registros pero en localStorage hay datos (ej. configurados previamente en esta PC), subirlos
+      if (!data || data.length === 0) {
+        const localStored = localStorage.getItem('caja_diaria_records_v1')
+        if (localStored) {
+          try {
+            const parsedLocal = JSON.parse(localStored)
+            for (const [d, rec] of Object.entries(parsedLocal)) {
+              if (rec && (Number(rec.saldoInicial) > 0 || (rec.movimientos && rec.movimientos.length > 0))) {
+                await saveDayToSupabase(d, rec)
+              }
+            }
+          } catch (e) {
+            console.error('Error auto-migrando datos locales a Supabase:', e)
+          }
+        }
+        return
+      }
+
+      // Reconstruir los registros agrupando los chunks por fecha
+      const byDate = {}
+      data.forEach((item) => {
+        if (!item.nombre) return
+        const parts = item.nombre.split('__')
+        if (parts.length >= 4) {
+          const d = parts[0]
+          const idx = parseInt(parts[1], 10)
+          const content = parts.slice(3).join('__')
+          if (!byDate[d]) byDate[d] = []
+          byDate[d].push({ idx, content })
+        }
+      })
+
+      const reconstructed = {}
+      Object.keys(byDate).forEach((d) => {
+        byDate[d].sort((a, b) => a.idx - b.idx)
+        try {
+          const fullStr = byDate[d].map((x) => x.content).join('')
+          reconstructed[d] = JSON.parse(fullStr)
+        } catch (e) {
+          console.warn('Error parseando registro de caja para fecha:', d, e)
+        }
+      })
+
+      isRemoteUpdateRef.current = true
+      setCajasData((prev) => {
+        const next = { ...prev, ...reconstructed }
+        try {
+          localStorage.setItem('caja_diaria_records_v1', JSON.stringify(next))
+        } catch (e) {}
+        return next
+      })
+    } catch (err) {
+      console.error('Error en loadCajasFromSupabase:', err)
+    }
+  }, [supabase, saveDayToSupabase])
+
+  // Escuchar cambios en tiempo real desde Supabase (Realtime)
+  useEffect(() => {
+    loadCajasFromSupabase()
+
+    if (!supabase) return
+
+    const channel = supabase
+      .channel('realtime:caja_diaria_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'maestros', filter: 'categoria=eq.__CAJA_DATA__' },
+        () => {
+          loadCajasFromSupabase()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, loadCajasFromSupabase])
+
   // Datos de la caja actual seleccionada
   const currentCaja = useMemo(() => {
     const record = cajasData[selectedDate]
@@ -385,12 +569,14 @@ export default function CajaDiaria({
         desgloseBilletes: {},
         movimientos: []
       }
+      const updated = {
+        ...existing,
+        [field]: value
+      }
+      scheduleSaveToSupabase(selectedDate, updated)
       return {
         ...prev,
-        [selectedDate]: {
-          ...existing,
-          [field]: value
-        }
+        [selectedDate]: updated
       }
     })
   }
@@ -725,6 +911,8 @@ export default function CajaDiaria({
   // Guardar arqueo
   const handleSaveArqueo = () => {
     const hasBilletes = Object.values(billetesTemp).some((q) => Number(q) > 0)
+    let updatedRecord = null
+
     if (hasBilletes) {
       const calcTotal = DENOMINACIONES_BILLETES.reduce((acc, b) => {
         const qty = Number(billetesTemp[b.value]) || 0
@@ -732,43 +920,49 @@ export default function CajaDiaria({
       }, 0)
       setCajasData((prev) => {
         const existing = prev[selectedDate] || {}
+        updatedRecord = {
+          ...existing,
+          desgloseBilletes: billetesTemp,
+          recuentoManual: calcTotal
+        }
+        scheduleSaveToSupabase(selectedDate, updatedRecord)
         return {
           ...prev,
-          [selectedDate]: {
-            ...existing,
-            desgloseBilletes: billetesTemp,
-            recuentoManual: calcTotal
-          }
+          [selectedDate]: updatedRecord
         }
       })
     } else if (recuentoDirectoInput !== '') {
       setCajasData((prev) => {
         const existing = prev[selectedDate] || {}
+        updatedRecord = {
+          ...existing,
+          desgloseBilletes: {},
+          recuentoManual: Number(recuentoDirectoInput)
+        }
+        scheduleSaveToSupabase(selectedDate, updatedRecord)
         return {
           ...prev,
-          [selectedDate]: {
-            ...existing,
-            desgloseBilletes: {},
-            recuentoManual: Number(recuentoDirectoInput)
-          }
+          [selectedDate]: updatedRecord
         }
       })
     } else {
       setCajasData((prev) => {
         const existing = prev[selectedDate] || {}
+        updatedRecord = {
+          ...existing,
+          desgloseBilletes: {},
+          recuentoManual: null
+        }
+        scheduleSaveToSupabase(selectedDate, updatedRecord)
         return {
           ...prev,
-          [selectedDate]: {
-            ...existing,
-            desgloseBilletes: {},
-            recuentoManual: null
-          }
+          [selectedDate]: updatedRecord
         }
       })
     }
 
     setIsArqueoModalOpen(false)
-    showToast('Arqueo de caja actualizado.')
+    showToast('Arqueo de caja actualizado y sincronizado en la nube.')
   }
 
   // Exportar a Excel
@@ -911,10 +1105,44 @@ export default function CajaDiaria({
             <Receipt className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-lg md:text-xl font-bold text-white flex flex-wrap items-center gap-2">
               Planilla de Caja Diaria
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30">
                 Secretaría
+              </span>
+              <span
+                className={`text-[11px] px-2.5 py-0.5 rounded-full flex items-center gap-1.5 border font-medium ${
+                  syncStatus === 'syncing'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : syncStatus === 'saved'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : syncStatus === 'error'
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                    : 'bg-slate-800 text-slate-300 border-slate-700'
+                }`}
+                title="Sincronización en tiempo real compartida entre todas las PCs"
+              >
+                {syncStatus === 'syncing' ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                    <span>Guardando en nube...</span>
+                  </>
+                ) : syncStatus === 'saved' ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-400" />
+                    <span>Sincronizado en la nube</span>
+                  </>
+                ) : syncStatus === 'error' ? (
+                  <>
+                    <AlertTriangle className="w-3 h-3 text-rose-400" />
+                    <span>Error al sincronizar</span>
+                  </>
+                ) : (
+                  <>
+                    <Cloud className="w-3 h-3 text-blue-400" />
+                    <span>Nube activa</span>
+                  </>
+                )}
               </span>
             </h1>
             <p className="text-xs text-slate-400">Control de ingresos, operaciones en banco, cheques, egresos y arqueo</p>
@@ -951,6 +1179,19 @@ export default function CajaDiaria({
             className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 transition cursor-pointer"
           >
             Hoy
+          </button>
+
+          {/* Botón Sincronizar con la Nube */}
+          <button
+            onClick={() => {
+              loadCajasFromSupabase()
+              showToast('Caja diaria sincronizada desde la nube.')
+            }}
+            title="Recargar y sincronizar con la nube ahora"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin text-amber-400' : ''}`} />
+            <span>Sincronizar</span>
           </button>
 
           {/* Botón Depositar Cheque de Cartera */}
@@ -1024,11 +1265,24 @@ export default function CajaDiaria({
               type="number"
               value={currentCaja.saldoInicial ?? ''}
               onChange={(e) => updateCurrentCaja('saldoInicial', e.target.value === '' ? 0 : Number(e.target.value))}
+              onBlur={() => flushSaveToSupabase(selectedDate)}
               placeholder="0.00"
               className="text-lg md:text-xl font-black text-white bg-slate-950/60 border border-slate-700/60 rounded-lg px-2 py-0.5 w-full focus:outline-none focus:border-amber-500 transition"
             />
           </div>
-          <p className="text-[10px] text-slate-500 mt-1">Apertura en efectivo físico</p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[10px] text-slate-500">Apertura en efectivo físico</p>
+            {syncStatus === 'syncing' && (
+              <span className="text-[10px] text-amber-400 flex items-center gap-1 font-medium">
+                <RefreshCw className="w-2.5 h-2.5 animate-spin" /> Guardando...
+              </span>
+            )}
+            {syncStatus === 'saved' && (
+              <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
+                <Check className="w-2.5 h-2.5" /> En la nube
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Total Ingresos */}
@@ -1465,6 +1719,7 @@ export default function CajaDiaria({
             type="text"
             value={currentCaja.responsable || ''}
             onChange={(e) => updateCurrentCaja('responsable', e.target.value)}
+            onBlur={() => flushSaveToSupabase(selectedDate)}
             placeholder="Nombre y apellido del responsable"
             className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
           />
