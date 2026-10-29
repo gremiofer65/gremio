@@ -29,7 +29,13 @@ export const REGLAS_CATEGORIAS = {
     'comispserv',
     'comistransfne24',
     'comiscompensacionatenc',
-    'comiscanjeobancos'
+    'comiscanjeobancos',
+    'comechcanjeobancos',
+    'canjeobancos',
+    'comech',
+    'comision',
+    'comis',
+    'gastos'
   ],
   'CHEQUES DEBITADOS': ['pagochequepropiacasa'],
   'INTERDEPOSITOS': [
@@ -64,7 +70,8 @@ export const REGLAS_CATEGORIAS = {
     'dep',
     'deposito',
     'efectivo',
-    'ch',
+    'depch',
+    'depositocheque',
     'transfintermmlinkular',
     'camfeddistpzaobcos',
     'crtransfinterbaneres',
@@ -116,7 +123,24 @@ export function recalcularAnalisisBanco(analisisOriginal, transaccionesActualiza
     const detNorm = normText(t.DETALLE || '')
     const isTransfLink = detNorm.includes('transfintdistlinklar') || detNorm.includes('transfintdist')
     const isCrTr = detNorm.includes('crtr') || detNorm.includes('crtransf') || detNorm.includes('creditos')
-    const isDeposito = t.CATEGORIA === 'DEPOSITOS' || isTransfLink || isCrTr
+    const isComision =
+      t.CATEGORIA === 'COMISIONES Y GASTOS' ||
+      detNorm.includes('comechcanjeobancos') ||
+      detNorm.includes('canjeobancos') ||
+      detNorm.includes('comech') ||
+      detNorm.includes('comis') ||
+      detNorm.includes('gastos')
+    const isDeposito = (t.CATEGORIA === 'DEPOSITOS' || isTransfLink || isCrTr) && !isComision
+
+    // Asegurar que comisiones y gastos computen en debitos
+    if (isComision && Number(t.CREDITOS || 0) > 0 && Number(t.DEBITOS || 0) === 0) {
+      return {
+        ...t,
+        DEBITOS: Number(t.CREDITOS || 0),
+        CREDITOS: 0,
+        CATEGORIA: 'COMISIONES Y GASTOS'
+      }
+    }
 
     // Asegurar que TRANSF.INT.DIST-LINKLAR, CR.TR. y DEPOSITOS computen en creditos
     if (isDeposito && Number(t.DEBITOS || 0) > 0 && Number(t.CREDITOS || 0) === 0) {
@@ -338,12 +362,22 @@ export async function parsePdfExtractoBanco(file) {
           let categoria = clasificarMovimientoBanco(detalle)
           const detNorm = normText(detalle)
 
-          // TRANSF.INT.DIST-LINKLAR, CR.TR. y depósitos son créditos contables (dinero entrante)
+          const isComision =
+            categoria === 'COMISIONES Y GASTOS' ||
+            detNorm.includes('comechcanjeobancos') ||
+            detNorm.includes('canjeobancos') ||
+            detNorm.includes('comech') ||
+            detNorm.includes('comis') ||
+            detNorm.includes('gastos')
           const isTransfLink = detNorm.includes('transfintdistlinklar') || detNorm.includes('transfintdist')
           const isCrTr = detNorm.includes('crtr') || detNorm.includes('crtransf') || detNorm.includes('creditos')
-          const isDeposito = categoria === 'DEPOSITOS' || isTransfLink || isCrTr
+          const isDeposito = (categoria === 'DEPOSITOS' || isTransfLink || isCrTr) && !isComision
 
-          if (isDeposito && debitos > 0 && creditos === 0) {
+          if (isComision && creditos > 0 && debitos === 0) {
+            debitos = creditos
+            creditos = 0
+            categoria = 'COMISIONES Y GASTOS'
+          } else if (isDeposito && debitos > 0 && creditos === 0) {
             creditos = debitos
             debitos = 0
             categoria = 'DEPOSITOS'
