@@ -49,6 +49,8 @@ export const REGLAS_CATEGORIAS = {
     'debtraninterblinktit',
     'rendpservrecaudacion',
     'transfintdistlinklar',
+    'transfintdist',
+    'transfintdistlink',
     'cbetrobcodsuc0001k',
     'rendicionpagoslink',
     'debin',
@@ -107,7 +109,22 @@ export function clasificarMovimientoBanco(detalle = '') {
 export function recalcularAnalisisBanco(analisisOriginal, transaccionesActualizadas) {
   if (!analisisOriginal || !transaccionesActualizadas) return analisisOriginal
 
-  const transactions = transaccionesActualizadas
+  const transactions = transaccionesActualizadas.map((t) => {
+    const detNorm = normText(t.DETALLE || '')
+    const isTransfLink = detNorm.includes('transfintdistlinklar') || detNorm.includes('transfintdist')
+    const isDeposito = t.CATEGORIA === 'DEPOSITOS' || isTransfLink
+
+    // Asegurar que TRANSF.INT.DIST-LINKLAR y DEPOSITOS computen en creditos
+    if (isDeposito && Number(t.DEBITOS || 0) > 0 && Number(t.CREDITOS || 0) === 0) {
+      return {
+        ...t,
+        DEBITOS: 0,
+        CREDITOS: Number(t.DEBITOS || 0),
+        CATEGORIA: 'DEPOSITOS'
+      }
+    }
+    return t
+  })
 
   // Totales por Detalle
   const totalesPorDetalle = {}
@@ -314,7 +331,19 @@ export async function parsePdfExtractoBanco(file) {
         }
 
         if (detalle && (debitos > 0 || creditos > 0)) {
-          const categoria = clasificarMovimientoBanco(detalle)
+          let categoria = clasificarMovimientoBanco(detalle)
+          const detNorm = normText(detalle)
+
+          // TRANSF.INT.DIST-LINKLAR y depósitos son créditos contables (dinero entrante)
+          const isTransfLink = detNorm.includes('transfintdistlinklar') || detNorm.includes('transfintdist')
+          const isDeposito = categoria === 'DEPOSITOS' || isTransfLink
+
+          if (isDeposito && debitos > 0 && creditos === 0) {
+            creditos = debitos
+            debitos = 0
+            categoria = 'DEPOSITOS'
+          }
+
           transactions.push({
             id: `tx-${transactions.length + 1}-${Date.now()}`,
             FECHA: fecha,

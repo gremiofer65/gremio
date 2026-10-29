@@ -99,6 +99,34 @@ export default function ModuloBancos({
     }
   }
 
+  // Permite intercambiar un movimiento entre Débito y Crédito si fuera necesario
+  const handleToggleDebitoCredito = (txId) => {
+    const isCobros = activePdfTab === 'cobros'
+    const analisisObj = isCobros ? pdfCobrosAnalisis : pdfPagosAnalisis
+    if (!analisisObj) return
+
+    const updatedTransactions = analisisObj.transactions.map((t) => {
+      if (t.id === txId) {
+        const deb = Number(t.DEBITOS || 0)
+        const cred = Number(t.CREDITOS || 0)
+        return {
+          ...t,
+          DEBITOS: cred,
+          CREDITOS: deb,
+          CATEGORIA: cred > 0 ? (t.CATEGORIA === 'DEPOSITOS' ? 'INTERDEPOSITOS' : t.CATEGORIA) : 'DEPOSITOS'
+        }
+      }
+      return t
+    })
+
+    const updatedAnalisis = recalcularAnalisisBanco(analisisObj, updatedTransactions)
+    if (isCobros) {
+      setPdfCobrosAnalisis(updatedAnalisis)
+    } else {
+      setPdfPagosAnalisis(updatedAnalisis)
+    }
+  }
+
   // Estado de Autocompletado del Archivo de Conciliación Sindicato Excel (.xlsx)
   const [isFillingExcel, setIsFillingExcel] = useState(false)
   const [excelFillResult, setExcelFillResult] = useState(null)
@@ -1215,10 +1243,32 @@ export default function ModuloBancos({
                                   )}
                                 </td>
                                 <td className="py-2 px-3 font-mono font-bold text-rose-400 text-right whitespace-nowrap">
-                                  {t.DEBITOS > 0 ? fmtMoney(t.DEBITOS) : '-'}
+                                  {t.DEBITOS > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleDebitoCredito(t.id)}
+                                      className="hover:underline hover:text-rose-300 cursor-pointer transition"
+                                      title="Clic para mover este importe a Crédito"
+                                    >
+                                      {fmtMoney(t.DEBITOS)}
+                                    </button>
+                                  ) : (
+                                    '-'
+                                  )}
                                 </td>
                                 <td className="py-2 px-3 font-mono font-bold text-emerald-400 text-right whitespace-nowrap">
-                                  {t.CREDITOS > 0 ? fmtMoney(t.CREDITOS) : '-'}
+                                  {t.CREDITOS > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleDebitoCredito(t.id)}
+                                      className="hover:underline hover:text-emerald-300 cursor-pointer transition"
+                                      title="Clic para mover este importe a Débito"
+                                    >
+                                      {fmtMoney(t.CREDITOS)}
+                                    </button>
+                                  ) : (
+                                    '-'
+                                  )}
                                 </td>
                                 <td className="py-2 px-3 font-mono font-bold text-slate-200 text-right whitespace-nowrap">
                                   {fmtMoney(t.SALDO)}
