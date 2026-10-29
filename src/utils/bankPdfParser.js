@@ -49,7 +49,11 @@ export const REGLAS_CATEGORIAS = {
     'pagomovistarhogar',
     'pagocajademedaportp',
     'pagofaecys',
-    '48hsbancos'
+    '48hsbancos',
+    'dbtransferencilinkiada',
+    'dbtransferencilink',
+    'dbtransferenci',
+    'transferencilinkiada'
   ],
   'DEPOSITOS': [
     'debtraninterblinktit',
@@ -67,6 +71,10 @@ export const REGLAS_CATEGORIAS = {
     'crtrfacturasuc0001',
     'crtr',
     'crtransfinterlinkres',
+    'crintermmotilink',
+    'crintermmoti',
+    'crintermmo',
+    'crinter',
     'dep',
     'deposito',
     'efectivo',
@@ -122,7 +130,16 @@ export function recalcularAnalisisBanco(analisisOriginal, transaccionesActualiza
   const transactions = transaccionesActualizadas.map((t) => {
     const detNorm = normText(t.DETALLE || '')
     const isTransfLink = detNorm.includes('transfintdistlinklar') || detNorm.includes('transfintdist')
-    const isCrTr = detNorm.includes('crtr') || detNorm.includes('crtransf') || detNorm.includes('creditos')
+    const isCrTr =
+      detNorm.includes('crtr') ||
+      detNorm.includes('crtransf') ||
+      detNorm.includes('crinter') ||
+      detNorm.includes('creditos')
+    const isInterdeposito =
+      t.CATEGORIA === 'INTERDEPOSITOS' ||
+      detNorm.includes('dbtransferencilinkiada') ||
+      detNorm.includes('dbtransferenci') ||
+      detNorm.includes('transferencilinkiada')
     const isComision =
       t.CATEGORIA === 'COMISIONES Y GASTOS' ||
       detNorm.includes('comechcanjeobancos') ||
@@ -130,7 +147,7 @@ export function recalcularAnalisisBanco(analisisOriginal, transaccionesActualiza
       detNorm.includes('comech') ||
       detNorm.includes('comis') ||
       detNorm.includes('gastos')
-    const isDeposito = (t.CATEGORIA === 'DEPOSITOS' || isTransfLink || isCrTr) && !isComision
+    const isDeposito = (t.CATEGORIA === 'DEPOSITOS' || isTransfLink || isCrTr) && !isComision && !isInterdeposito
 
     // Asegurar que comisiones y gastos computen en debitos
     if (isComision && Number(t.CREDITOS || 0) > 0 && Number(t.DEBITOS || 0) === 0) {
@@ -142,7 +159,17 @@ export function recalcularAnalisisBanco(analisisOriginal, transaccionesActualiza
       }
     }
 
-    // Asegurar que TRANSF.INT.DIST-LINKLAR, CR.TR. y DEPOSITOS computen en creditos
+    // Asegurar que interdepositos computen en debitos
+    if (isInterdeposito && Number(t.CREDITOS || 0) > 0 && Number(t.DEBITOS || 0) === 0) {
+      return {
+        ...t,
+        DEBITOS: Number(t.CREDITOS || 0),
+        CREDITOS: 0,
+        CATEGORIA: 'INTERDEPOSITOS'
+      }
+    }
+
+    // Asegurar que TRANSF.INT.DIST-LINKLAR, CR.TR., CR.INTER. y DEPOSITOS computen en creditos
     if (isDeposito && Number(t.DEBITOS || 0) > 0 && Number(t.CREDITOS || 0) === 0) {
       return {
         ...t,
@@ -362,6 +389,11 @@ export async function parsePdfExtractoBanco(file) {
           let categoria = clasificarMovimientoBanco(detalle)
           const detNorm = normText(detalle)
 
+          const isInterdeposito =
+            categoria === 'INTERDEPOSITOS' ||
+            detNorm.includes('dbtransferencilinkiada') ||
+            detNorm.includes('dbtransferenci') ||
+            detNorm.includes('transferencilinkiada')
           const isComision =
             categoria === 'COMISIONES Y GASTOS' ||
             detNorm.includes('comechcanjeobancos') ||
@@ -370,13 +402,21 @@ export async function parsePdfExtractoBanco(file) {
             detNorm.includes('comis') ||
             detNorm.includes('gastos')
           const isTransfLink = detNorm.includes('transfintdistlinklar') || detNorm.includes('transfintdist')
-          const isCrTr = detNorm.includes('crtr') || detNorm.includes('crtransf') || detNorm.includes('creditos')
-          const isDeposito = (categoria === 'DEPOSITOS' || isTransfLink || isCrTr) && !isComision
+          const isCrTr =
+            detNorm.includes('crtr') ||
+            detNorm.includes('crtransf') ||
+            detNorm.includes('crinter') ||
+            detNorm.includes('creditos')
+          const isDeposito = (categoria === 'DEPOSITOS' || isTransfLink || isCrTr) && !isComision && !isInterdeposito
 
           if (isComision && creditos > 0 && debitos === 0) {
             debitos = creditos
             creditos = 0
             categoria = 'COMISIONES Y GASTOS'
+          } else if (isInterdeposito && creditos > 0 && debitos === 0) {
+            debitos = creditos
+            creditos = 0
+            categoria = 'INTERDEPOSITOS'
           } else if (isDeposito && debitos > 0 && creditos === 0) {
             creditos = debitos
             debitos = 0
