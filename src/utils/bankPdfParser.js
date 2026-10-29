@@ -579,8 +579,104 @@ function fillAccountInWorksheet(targetWs, pdfItem) {
 }
 
 /**
+ * Clona una hoja de ExcelJS preservando 100% de anchos de columnas, estilos, bordes, colores, fuentes,
+ * fórmulas y combinaciones de celdas (merges) para acumular mes a mes.
+ */
+export function cloneWorksheet(workbook, sourceWs, newSheetName) {
+  const newWs = workbook.addWorksheet(newSheetName)
+
+  // 1. Replicar ancho de columnas
+  const maxCols = Math.max(
+    sourceWs.columnCount || 0,
+    (sourceWs.columns && sourceWs.columns.length) || 0,
+    25
+  )
+  for (let c = 1; c <= maxCols; c++) {
+    const srcCol = sourceWs.getColumn(c)
+    if (srcCol && srcCol.width) {
+      newWs.getColumn(c).width = srcCol.width
+    }
+  }
+
+  // 2. Replicar cada fila, celda, estilo y fórmula
+  sourceWs.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const newRow = newWs.getRow(rowNumber)
+    if (row.height) newRow.height = row.height
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const newCell = newRow.getCell(colNumber)
+
+      // Fórmulas y valores
+      if (cell.value && typeof cell.value === 'object') {
+        if (cell.value.formula) {
+          newCell.value = { formula: cell.value.formula, result: cell.value.result }
+        } else if (cell.value.sharedFormula) {
+          newCell.value = { sharedFormula: cell.value.sharedFormula, result: cell.value.result }
+        } else if (cell.value instanceof Date) {
+          newCell.value = cell.value
+        } else {
+          try {
+            newCell.value = JSON.parse(JSON.stringify(cell.value))
+          } catch (e) {
+            newCell.value = cell.value
+          }
+        }
+      } else {
+        newCell.value = cell.value
+      }
+
+      // Estilos visuales
+      if (cell.style) {
+        try {
+          newCell.style = JSON.parse(JSON.stringify(cell.style))
+        } catch (e) {
+          newCell.style = cell.style
+        }
+      }
+    })
+  })
+
+  // 3. Replicar combinación de celdas
+  if (sourceWs.model && sourceWs.model.merges) {
+    sourceWs.model.merges.forEach((mergeRange) => {
+      try {
+        newWs.mergeCells(mergeRange)
+      } catch (e) {}
+    })
+  }
+
+  return newWs
+}
+
+/**
+ * Limpia los importes variables de una cuenta en una hoja clonada para que no arrastre números del mes anterior
+ */
+function clearAccountAmountsInWorksheet(targetWs, isPagos) {
+  const labelColIdx = isPagos ? 7 : 1
+  const valColIdx = isPagos ? 8 : 2
+
+  targetWs.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber > 45) return
+    const labelCell = row.getCell(labelColIdx)
+    const labelRaw = typeof labelCell?.value === 'string' ? labelCell.value.trim() : ''
+    const labelNorm = normText(labelRaw)
+    if (!labelNorm) return
+
+    const targetCell = row.getCell(valColIdx)
+    if (['impuestosdebcred', 'ivadebito', 'comisionesygastos', 'chequesdebitados', 'interdepositos', 'depositos'].includes(labelNorm)) {
+      if (targetCell.value && typeof targetCell.value === 'object' && targetCell.value.formula) {
+        targetCell.value = { formula: targetCell.value.formula, result: 0 }
+      } else {
+        targetCell.value = 0
+      }
+    }
+  })
+}
+
+/**
  * Autocompleta el archivo oficial de Conciliación Sindicato (.xlsx)
  * Acepta UN SOLO PDF o una LISTA DE PDFs (Cobros y Pagos) y rellena ambas columnas en un solo paso
+ * Si la hoja del mes no existe, genera automáticamente una NUEVA HOJA mes a mes acumulando el historial,
  * preservando el 100% de formatos, colores y fórmulas, y realizando la verificación de saldos.
  */
 export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnalisisOrList, targetSheetName = null) {
@@ -612,32 +708,106 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
     sheetNames.push(worksheet.name)
   })
 
-  // 1. Identificar la hoja del mes correspondiente a partir del primer PDF disponible
+  // 1. Identificar o generar la hoja del mes correspondiente a partir del primer PDF disponible
   const primerPdf = pdfList[0]
   let foundSheetName = targetSheetName
+  let isNewSheet = false
+
+  const monthNames = [
+    'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+    'Jul', 'Ago', 'Sept', 'Octub', 'Nov', 'Dic'
+  ]
+  const monthFullNames = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ]
+  const mNum = primerPdf.detectedMonthNumber || (new Date().getMonth() + 1)
+  const mPrefix = monthNames[mNum - 1]
+  const fullMonth = monthFullNames[mNum - 1]
+  const yr = String(primerPdf.detectedYear || new Date().getFullYear())
+  const yrShort = yr.slice(-2)
 
   if (!foundSheetName) {
-    const monthNames = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sept', 'Octub', 'Nov', 'Dic'
-    ]
-    const mNum = primerPdf.detectedMonthNumber || 9
-    const mPrefix = monthNames[mNum - 1]
-    const yr = primerPdf.detectedYear || '2026'
-
+    // Buscar si ya existe la hoja para el mes y año
     foundSheetName = sheetNames.find((s) => {
       const sLow = s.toLowerCase()
-      return sLow.includes(mPrefix.toLowerCase()) && (sLow.includes(yr) || sLow.includes(yr.slice(-2)))
+      const matchMonth = sLow.includes(mPrefix.toLowerCase()) || sLow.includes(fullMonth.toLowerCase()) || (mNum === 9 && sLow.includes('set'))
+      const matchYear = sLow.includes(yr) || sLow.includes(yrShort)
+      return matchMonth && matchYear
     })
 
     if (!foundSheetName) {
-      foundSheetName = sheetNames.find((s) => s.toLowerCase().includes(mPrefix.toLowerCase()))
+      foundSheetName = sheetNames.find((s) => {
+        const sLow = s.toLowerCase()
+        return sLow.includes(mPrefix.toLowerCase()) || sLow.includes(fullMonth.toLowerCase()) || (mNum === 9 && sLow.includes('set'))
+      })
+    }
+
+    // SI NO EXISTE LA HOJA DEL MES -> CREAR UNA NUEVA HOJA MES A MES CLONANDO LA ANTERIOR
+    if (!foundSheetName) {
+      isNewSheet = true
+
+      // Determinar el nombre adecuado según el estilo de hojas existentes
+      const hasFullNames = sheetNames.some((s) => monthFullNames.some((fm) => s.toLowerCase().includes(fm.toLowerCase())))
+      const hasFourDigitYear = sheetNames.some((s) => s.includes(yr))
+
+      let candidateName = `${mPrefix} ${yrShort}`
+      if (hasFullNames) {
+        candidateName = hasFourDigitYear ? `${fullMonth} ${yr}` : `${fullMonth} ${yrShort}`
+      } else if (hasFourDigitYear) {
+        candidateName = `${mPrefix} ${yr}`
+      }
+
+      // Si por alguna razón el nombre coincidiera exactamente con una existente, desambiguar
+      if (sheetNames.includes(candidateName)) {
+        candidateName = `${candidateName} (Nuevo)`
+      }
+
+      foundSheetName = candidateName
+
+      // Tomar la última hoja disponible como plantilla base a replicar
+      const sourceWs = workbook.worksheets[workbook.worksheets.length - 1] || workbook.worksheets[0]
+      if (!sourceWs) {
+        throw new Error('El archivo Excel cargado no contiene ninguna hoja para utilizar como plantilla.')
+      }
+
+      cloneWorksheet(workbook, sourceWs, foundSheetName)
     }
   }
 
-  const targetWs = foundSheetName ? workbook.getWorksheet(foundSheetName) : null
+  const targetWs = workbook.getWorksheet(foundSheetName)
   if (!targetWs) {
-    throw new Error(`No se encontró la hoja para el período en el archivo Excel. Hojas disponibles: ${sheetNames.join(', ')}`)
+    throw new Error(`No se pudo obtener o crear la hoja "${foundSheetName}".`)
+  }
+
+  // Si es una hoja nueva, actualizar los encabezados de texto del mes (ej: "CONCILIACION SETIEMBRE 2026" -> "OCTUBRE 2026")
+  if (isNewSheet) {
+    const monthFullUpper = [
+      'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+      'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'SETIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+    ]
+    const newMonthUpper = monthFullNames[mNum - 1].toUpperCase()
+
+    for (let r = 1; r <= 8; r++) {
+      const row = targetWs.getRow(r)
+      row.eachCell((cell) => {
+        if (typeof cell.value === 'string') {
+          let val = cell.value
+          monthFullUpper.forEach((m) => {
+            if (m !== newMonthUpper && val.toUpperCase().includes(m)) {
+              val = val.replace(new RegExp(m, 'gi'), newMonthUpper)
+            }
+          })
+          cell.value = val
+        }
+      })
+    }
+
+    // Si solo se cargó una de las dos cuentas en este pase, limpiar los importes variables de la otra
+    const hasCobros = pdfList.some((p) => p.account.includes('2341052324') || p.tipo === 'Cobros')
+    const hasPagos = pdfList.some((p) => p.account.includes('2341055145') || p.tipo === 'Pagos')
+    if (!hasCobros) clearAccountAmountsInWorksheet(targetWs, false)
+    if (!hasPagos) clearAccountAmountsInWorksheet(targetWs, true)
   }
 
   // 2. Rellenar las columnas de CADA PDF cargado (Cobros 2324 y/o Pagos 5145) y capturar verificaciones
@@ -652,13 +822,13 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
     }
   }
 
-  // 3. Escribir y descargar el archivo Excel actualizado con ambas columnas completadas
+  // 3. Escribir y descargar el archivo Excel actualizado con ambas columnas completadas y todas las hojas
   const updatedBuffer = await workbook.xlsx.writeBuffer()
   const blob = new Blob([updatedBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  
+
   const baseName = excelFile.name.replace(/\.xlsx$/i, '')
   link.setAttribute('download', `${baseName}_Actualizado_${foundSheetName.replace(/\s+/g, '_')}.xlsx`)
   document.body.appendChild(link)
@@ -669,6 +839,8 @@ export async function autocompletarExcelConciliacionSindicato(excelFile, pdfAnal
   return {
     success: true,
     sheetUpdated: foundSheetName,
+    isNewSheet,
+    totalSheets: workbook.worksheets.length,
     cuentasActualizadas: cuentasActualizadas.join(' y '),
     verificaciones
   }

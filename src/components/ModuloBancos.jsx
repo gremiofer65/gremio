@@ -800,9 +800,16 @@ export default function ModuloBancos({
                     <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                     <span>¡Planilla de Conciliación Autocompletada y Verificada!</span>
                   </div>
-                  <span className="px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Hoja: {excelFillResult.sheetUpdated}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {excelFillResult.isNewSheet && (
+                      <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                        ✨ Nueva Hoja Creada
+                      </span>
+                    )}
+                    <span className="px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Hoja: {excelFillResult.sheetUpdated} {excelFillResult.totalSheets ? `(${excelFillResult.totalSheets} hojas)` : ''}
+                    </span>
+                  </div>
                 </div>
 
                 {/* TARJETAS DE VERIFICACIÓN POR CUENTA (SALDO ANTERIOR Y SALDO FINAL VS CONTABLE) */}
@@ -880,7 +887,16 @@ export default function ModuloBancos({
                 )}
 
                 <p className="text-slate-300 text-center text-xs">
-                  Se completaron las columnas en <strong className="text-white">"{excelFillResult.sheetUpdated}"</strong> para <strong className="text-sky-300">{excelFillResult.cuentasActualizadas}</strong>. El archivo descargado preserva el 100% del diseño y fórmulas originales.
+                  {excelFillResult.isNewSheet ? (
+                    <>
+                      Se ha generado e incorporado una <strong className="text-emerald-300">NUEVA HOJA</strong> nombrada <strong className="text-white">"{excelFillResult.sheetUpdated}"</strong> preservando las hojas anteriores ({excelFillResult.totalSheets} hojas en el archivo). Se completaron las columnas para <strong className="text-sky-300">{excelFillResult.cuentasActualizadas}</strong>.
+                    </>
+                  ) : (
+                    <>
+                      Se actualizaron las columnas en la hoja existente <strong className="text-white">"{excelFillResult.sheetUpdated}"</strong> para <strong className="text-sky-300">{excelFillResult.cuentasActualizadas}</strong>.
+                    </>
+                  )}{' '}
+                  El archivo descargado preserva el 100% del diseño y fórmulas originales.
                 </p>
               </div>
             )}
