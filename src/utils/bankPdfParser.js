@@ -55,7 +55,11 @@ export const REGLAS_CATEGORIAS = {
     'rendicionpagoslink',
     'debin',
     'transfintdistbanelar',
+    'crtrcuotascsuc0001',
+    'crtrcuotas',
     'crtrvariosvsuc0001',
+    'crtrfacturasuc0001',
+    'crtr',
     'crtransfinterlinkres',
     'dep',
     'deposito',
@@ -65,8 +69,7 @@ export const REGLAS_CATEGORIAS = {
     'camfeddistpzaobcos',
     'crtransfinterbaneres',
     'creditosvarios',
-    'cobradoporcaja',
-    'crtrfacturasuc0001'
+    'cobradoporcaja'
   ]
 }
 
@@ -112,9 +115,10 @@ export function recalcularAnalisisBanco(analisisOriginal, transaccionesActualiza
   const transactions = transaccionesActualizadas.map((t) => {
     const detNorm = normText(t.DETALLE || '')
     const isTransfLink = detNorm.includes('transfintdistlinklar') || detNorm.includes('transfintdist')
-    const isDeposito = t.CATEGORIA === 'DEPOSITOS' || isTransfLink
+    const isCrTr = detNorm.includes('crtr') || detNorm.includes('crtransf') || detNorm.includes('creditos')
+    const isDeposito = t.CATEGORIA === 'DEPOSITOS' || isTransfLink || isCrTr
 
-    // Asegurar que TRANSF.INT.DIST-LINKLAR y DEPOSITOS computen en creditos
+    // Asegurar que TRANSF.INT.DIST-LINKLAR, CR.TR. y DEPOSITOS computen en creditos
     if (isDeposito && Number(t.DEBITOS || 0) > 0 && Number(t.CREDITOS || 0) === 0) {
       return {
         ...t,
@@ -334,9 +338,10 @@ export async function parsePdfExtractoBanco(file) {
           let categoria = clasificarMovimientoBanco(detalle)
           const detNorm = normText(detalle)
 
-          // TRANSF.INT.DIST-LINKLAR y depósitos son créditos contables (dinero entrante)
+          // TRANSF.INT.DIST-LINKLAR, CR.TR. y depósitos son créditos contables (dinero entrante)
           const isTransfLink = detNorm.includes('transfintdistlinklar') || detNorm.includes('transfintdist')
-          const isDeposito = categoria === 'DEPOSITOS' || isTransfLink
+          const isCrTr = detNorm.includes('crtr') || detNorm.includes('crtransf') || detNorm.includes('creditos')
+          const isDeposito = categoria === 'DEPOSITOS' || isTransfLink || isCrTr
 
           if (isDeposito && debitos > 0 && creditos === 0) {
             creditos = debitos
