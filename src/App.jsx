@@ -1440,6 +1440,7 @@ export default function App() {
       medicoOtrasConcepto: '',
       medicoOtrasCantidad: '',
       medicoOtrasValor: '',
+      medicoOtrasItems: [{ id: 'otra-1', concepto: '', cantidad: '', valor: '' }],
       medicoValorGlobal: '',
       // Ingresos Detallados
       ingresosCFL: '',
@@ -2414,16 +2415,34 @@ export default function App() {
         }
       ]
 
-      const oCant = parseInt(updated.medicoOtrasCantidad, 10) || 0
-      const oVal = parseFloat(updated.medicoOtrasValor) || 0
-      const oConc = (updated.medicoOtrasConcepto || 'otra prestación').trim().toLowerCase()
-      if (oCant > 0) {
-        items.push({
-          nombre: oConc,
-          cant: oCant,
-          valor: oVal,
-          label: oConc
+      // Prestaciones personalizadas adicionales (soporte para múltiples ítems)
+      const customList = Array.isArray(updated.medicoOtrasItems) ? updated.medicoOtrasItems : []
+      if (customList.length > 0) {
+        customList.forEach((it) => {
+          const itCant = parseInt(it.cantidad, 10) || 0
+          const itVal = parseFloat(it.valor) || 0
+          const itConc = (it.concepto || 'otra prestación').trim().toLowerCase()
+          if (itCant > 0) {
+            items.push({
+              nombre: itConc,
+              cant: itCant,
+              valor: itVal,
+              label: itConc
+            })
+          }
         })
+      } else {
+        const oCant = parseInt(updated.medicoOtrasCantidad, 10) || 0
+        const oVal = parseFloat(updated.medicoOtrasValor) || 0
+        const oConc = (updated.medicoOtrasConcepto || 'otra prestación').trim().toLowerCase()
+        if (oCant > 0) {
+          items.push({
+            nombre: oConc,
+            cant: oCant,
+            valor: oVal,
+            label: oConc
+          })
+        }
       }
 
       const activeItems = items.filter((it) => it.cant > 0)
@@ -2471,9 +2490,73 @@ export default function App() {
     })
   }
 
+  // Helpers para agregar, editar y eliminar prestaciones médicas personalizadas dinámicas
+  const handleAddCustomMedicoItem = () => {
+    setFormData((prev) => {
+      const currentList = Array.isArray(prev.medicoOtrasItems) && prev.medicoOtrasItems.length > 0
+        ? [...prev.medicoOtrasItems]
+        : (prev.medicoOtrasConcepto || prev.medicoOtrasCantidad)
+        ? [{ id: 'otra-1', concepto: prev.medicoOtrasConcepto || '', cantidad: prev.medicoOtrasCantidad || '', valor: prev.medicoOtrasValor || '' }]
+        : [{ id: 'otra-1', concepto: '', cantidad: '', valor: '' }]
+
+      const newItem = {
+        id: `otra-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        concepto: '',
+        cantidad: '',
+        valor: prev.medicoValorGlobal || ''
+      }
+      const updatedList = [...currentList, newItem]
+      return {
+        ...prev,
+        medicoOtrasItems: updatedList,
+        medicoOtrasConcepto: updatedList[0]?.concepto || '',
+        medicoOtrasCantidad: updatedList[0]?.cantidad || '',
+        medicoOtrasValor: updatedList[0]?.valor || ''
+      }
+    })
+  }
+
+  const handleUpdateCustomMedicoItem = (id, field, val) => {
+    setFormData((prev) => {
+      const currentList = Array.isArray(prev.medicoOtrasItems) && prev.medicoOtrasItems.length > 0
+        ? [...prev.medicoOtrasItems]
+        : [{ id: 'otra-1', concepto: prev.medicoOtrasConcepto || '', cantidad: prev.medicoOtrasCantidad || '', valor: prev.medicoOtrasValor || '' }]
+
+      const updatedList = currentList.map((it) => (it.id === id ? { ...it, [field]: val } : it))
+      return {
+        ...prev,
+        medicoOtrasItems: updatedList,
+        medicoOtrasConcepto: updatedList[0]?.concepto || '',
+        medicoOtrasCantidad: updatedList[0]?.cantidad || '',
+        medicoOtrasValor: updatedList[0]?.valor || ''
+      }
+    })
+    handleSyncMedicoDesglose({})
+  }
+
+  const handleRemoveCustomMedicoItem = (id) => {
+    setFormData((prev) => {
+      const currentList = Array.isArray(prev.medicoOtrasItems) ? prev.medicoOtrasItems : []
+      const updatedList = currentList.filter((it) => it.id !== id)
+      const finalList = updatedList.length > 0 ? updatedList : [{ id: `otra-${Date.now()}`, concepto: '', cantidad: '', valor: '' }]
+      return {
+        ...prev,
+        medicoOtrasItems: finalList,
+        medicoOtrasConcepto: finalList[0]?.concepto || '',
+        medicoOtrasCantidad: finalList[0]?.cantidad || '',
+        medicoOtrasValor: finalList[0]?.valor || ''
+      }
+    })
+    handleSyncMedicoDesglose({})
+  }
+
   // Helper para aplicar un valor unitario masivo a todas las prestaciones activas
   const handleApplyGlobalValorToAll = (valToApply) => {
     const vStr = String(valToApply || '')
+    const updatedCustom = (formData.medicoOtrasItems || []).map((it) => ({
+      ...it,
+      valor: it.cantidad ? vStr : it.valor
+    }))
     handleSyncMedicoDesglose({
       medicoValorGlobal: vStr,
       medicoConsultasValor: formData.medicoConsultasCant ? vStr : formData.medicoConsultasValor,
@@ -2482,7 +2565,8 @@ export default function App() {
       medicoCirugiasValor: formData.medicoCirugiasCant ? vStr : formData.medicoCirugiasValor,
       medicoGuardiasValor: formData.medicoGuardiasCant ? vStr : formData.medicoGuardiasValor,
       medicoInformesValor: formData.medicoInformesCant ? vStr : formData.medicoInformesValor,
-      medicoOtrasValor: formData.medicoOtrasCantidad ? vStr : formData.medicoOtrasValor
+      medicoOtrasValor: formData.medicoOtrasCantidad ? vStr : formData.medicoOtrasValor,
+      medicoOtrasItems: updatedCustom
     })
   }
 
@@ -2498,6 +2582,7 @@ export default function App() {
     let guaCant = '', guaVal = ''
     let infCant = '', infVal = ''
     let oQty = '', oVal = '', oConc = ''
+    const customList = []
 
     parsed.items.forEach((it) => {
       const uPrice = it.precioUnitario ? String(it.precioUnitario) : (parsed.sharedPrice ? String(parsed.sharedPrice) : '')
@@ -2520,6 +2605,12 @@ export default function App() {
         infCant = String(it.cantidad)
         infVal = uPrice
       } else {
+        customList.push({
+          id: `otra-${customList.length + 1}-${Date.now()}`,
+          concepto: it.concepto,
+          cantidad: String(it.cantidad),
+          valor: uPrice
+        })
         oQty = String(it.cantidad)
         oVal = uPrice
         oConc = it.concepto
@@ -2543,7 +2634,8 @@ export default function App() {
         medicoInformesValor: infVal,
         medicoOtrasConcepto: oConc,
         medicoOtrasCantidad: oQty,
-        medicoOtrasValor: oVal
+        medicoOtrasValor: oVal,
+        medicoOtrasItems: customList.length > 0 ? customList : [{ id: 'otra-1', concepto: '', cantidad: '', valor: '' }]
       }
 
       if (parsed.totalCalculado && parsed.totalCalculado > 0) {
@@ -2658,6 +2750,7 @@ export default function App() {
     let medInfCant = '', medInfVal = ''
     let medOQty = '', medOVal = '', medOConc = ''
     let medUnit = ''
+    const medOtrasItemsList = []
 
     if (mov.rubro === 'MÉDICO') {
       const parsedMed = parseDetalleHonorariosMedicos(mov.detalleExtenso || mov.detalle)
@@ -2683,6 +2776,12 @@ export default function App() {
             medInfCant = String(it.cantidad)
             medInfVal = uPrice
           } else {
+            medOtrasItemsList.push({
+              id: `otra-${medOtrasItemsList.length + 1}-${Date.now()}`,
+              concepto: it.concepto,
+              cantidad: String(it.cantidad),
+              valor: uPrice
+            })
             medOQty = String(it.cantidad)
             medOVal = uPrice
             medOConc = it.concepto
@@ -2742,6 +2841,7 @@ export default function App() {
       medicoOtrasConcepto: medOConc,
       medicoOtrasCantidad: medOQty,
       medicoOtrasValor: medOVal,
+      medicoOtrasItems: medOtrasItemsList.length > 0 ? medOtrasItemsList : [{ id: 'otra-1', concepto: '', cantidad: '', valor: '' }],
       medicoValorGlobal: medUnit,
       ingresosCFL: mov.ingresosCFL ? String(mov.ingresosCFL) : '',
       ingresosCENS: mov.ingresosCENS ? String(mov.ingresosCENS) : '',
@@ -6964,90 +7064,148 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* 7. Otra prestación personalizada */}
-                      <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 space-y-1.5 sm:col-span-2 lg:col-span-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-300 flex items-center gap-1">
-                            ➕ Otra Prestación Personalizada
+                      {/* 7. Otras prestaciones personalizadas (múltiples) */}
+                      <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2.5 sm:col-span-2 lg:col-span-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                          <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                            <span className="text-blue-400">➕</span> Otras Prestaciones Personalizadas
+                            {(Array.isArray(formData.medicoOtrasItems) ? formData.medicoOtrasItems.length : 1) > 1 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono font-bold">
+                                {formData.medicoOtrasItems.length} ítems
+                              </span>
+                            )}
                           </span>
-                          {(parseInt(formData.medicoOtrasCantidad, 10) || 0) > 0 && (parseFloat(formData.medicoOtrasValor) || 0) > 0 && (
-                            <span className="text-[11px] font-mono font-bold text-emerald-400">
-                              {fmtMoney((parseInt(formData.medicoOtrasCantidad, 10) || 0) * (parseFloat(formData.medicoOtrasValor) || 0))}
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            onClick={handleAddCustomMedicoItem}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 hover:text-white border border-blue-500/30 text-xs font-semibold cursor-pointer transition shadow-sm"
+                            title="Agregar otra fila de prestación personalizada"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5 text-blue-400" />
+                            <span>➕ Agregar Otra Prestación</span>
+                          </button>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Nombre / Tipo</label>
-                            <input
-                              type="text"
-                              placeholder="Ej: endoscopías..."
-                              value={formData.medicoOtrasConcepto}
-                              onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasConcepto: e.target.value })}
-                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder="0"
-                              value={formData.medicoOtrasCantidad}
-                              onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasCantidad: e.target.value })}
-                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-slate-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              value={formData.medicoOtrasValor}
-                              onChange={(e) => handleSyncMedicoDesglose({ medicoOtrasValor: e.target.value })}
-                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
-                            />
-                          </div>
+
+                        <div className="space-y-2.5">
+                          {(Array.isArray(formData.medicoOtrasItems) && formData.medicoOtrasItems.length > 0
+                            ? formData.medicoOtrasItems
+                            : [{ id: 'otra-1', concepto: formData.medicoOtrasConcepto || '', cantidad: formData.medicoOtrasCantidad || '', valor: formData.medicoOtrasValor || '' }]
+                          ).map((item, index) => {
+                            const itCant = parseInt(item.cantidad, 10) || 0
+                            const itVal = parseFloat(item.valor) || 0
+                            const itSubtotal = itCant * itVal
+                            const totalItemsCount = Array.isArray(formData.medicoOtrasItems) ? formData.medicoOtrasItems.length : 1
+
+                            return (
+                              <div
+                                key={item.id || index}
+                                className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                    Prestación #{index + 1}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    {itSubtotal > 0 && (
+                                      <span className="text-[11px] font-mono font-bold text-emerald-400">
+                                        Subtotal: {fmtMoney(itSubtotal)}
+                                      </span>
+                                    )}
+                                    {totalItemsCount > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveCustomMedicoItem(item.id)}
+                                        className="p-1 rounded hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition cursor-pointer"
+                                        title="Eliminar esta prestación personalizada"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Nombre / Tipo</label>
+                                    <input
+                                      type="text"
+                                      placeholder="Ej: endoscopías, ecodopler, etc."
+                                      value={item.concepto || ''}
+                                      onChange={(e) => handleUpdateCustomMedicoItem(item.id, 'concepto', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-slate-400 block mb-0.5">Cantidad</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      placeholder="0"
+                                      value={item.cantidad || ''}
+                                      onChange={(e) => handleUpdateCustomMedicoItem(item.id, 'cantidad', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-semibold text-amber-400 block mb-0.5">Valor ($ c/u)</label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      placeholder="0.00"
+                                      value={item.valor || ''}
+                                      onChange={(e) => handleUpdateCustomMedicoItem(item.id, 'valor', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-amber-400"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     </div>
 
                     {/* Resumen en vivo */}
-                    {((parseInt(formData.medicoConsultasCant, 10) || 0) +
-                      (parseInt(formData.medicoPracticasCant, 10) || 0) +
-                      (parseInt(formData.medicoEcografiasCant, 10) || 0) +
-                      (parseInt(formData.medicoCirugiasCant, 10) || 0) +
-                      (parseInt(formData.medicoGuardiasCant, 10) || 0) +
-                      (parseInt(formData.medicoInformesCant, 10) || 0) +
-                      (parseInt(formData.medicoOtrasCantidad, 10) || 0) > 0) && (
-                      <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-xs bg-slate-950 px-3 py-2.5 rounded-lg border border-slate-800">
-                        <span className="text-slate-400">
-                          Total Prestaciones:{' '}
-                          <strong className="text-white font-mono font-bold">
-                            {(parseInt(formData.medicoConsultasCant, 10) || 0) +
-                              (parseInt(formData.medicoPracticasCant, 10) || 0) +
-                              (parseInt(formData.medicoEcografiasCant, 10) || 0) +
-                              (parseInt(formData.medicoCirugiasCant, 10) || 0) +
-                              (parseInt(formData.medicoGuardiasCant, 10) || 0) +
-                              (parseInt(formData.medicoInformesCant, 10) || 0) +
-                              (parseInt(formData.medicoOtrasCantidad, 10) || 0)}
-                          </strong>
-                        </span>
-                        <span className="font-mono font-bold text-emerald-400 text-sm">
-                          Total Bruto Calculado: {fmtMoney(
-                            (parseInt(formData.medicoConsultasCant, 10) || 0) * (parseFloat(formData.medicoConsultasValor) || 0) +
-                            (parseInt(formData.medicoPracticasCant, 10) || 0) * (parseFloat(formData.medicoPracticasValor) || 0) +
-                            (parseInt(formData.medicoEcografiasCant, 10) || 0) * (parseFloat(formData.medicoEcografiasValor) || 0) +
-                            (parseInt(formData.medicoCirugiasCant, 10) || 0) * (parseFloat(formData.medicoCirugiasValor) || 0) +
-                            (parseInt(formData.medicoGuardiasCant, 10) || 0) * (parseFloat(formData.medicoGuardiasValor) || 0) +
-                            (parseInt(formData.medicoInformesCant, 10) || 0) * (parseFloat(formData.medicoInformesValor) || 0) +
-                            (parseInt(formData.medicoOtrasCantidad, 10) || 0) * (parseFloat(formData.medicoOtrasValor) || 0)
-                          )}
-                        </span>
-                      </div>
-                    )}
+                    {(() => {
+                      const cConsultas = parseInt(formData.medicoConsultasCant, 10) || 0
+                      const cPracticas = parseInt(formData.medicoPracticasCant, 10) || 0
+                      const cEcografias = parseInt(formData.medicoEcografiasCant, 10) || 0
+                      const cCirugias = parseInt(formData.medicoCirugiasCant, 10) || 0
+                      const cGuardias = parseInt(formData.medicoGuardiasCant, 10) || 0
+                      const cInformes = parseInt(formData.medicoInformesCant, 10) || 0
+
+                      const customList = Array.isArray(formData.medicoOtrasItems) && formData.medicoOtrasItems.length > 0
+                        ? formData.medicoOtrasItems
+                        : [{ cantidad: formData.medicoOtrasCantidad, valor: formData.medicoOtrasValor }]
+
+                      const cOtras = customList.reduce((acc, it) => acc + (parseInt(it.cantidad, 10) || 0), 0)
+                      const totalPrestaciones = cConsultas + cPracticas + cEcografias + cCirugias + cGuardias + cInformes + cOtras
+
+                      if (totalPrestaciones === 0) return null
+
+                      const totalBruto =
+                        cConsultas * (parseFloat(formData.medicoConsultasValor) || 0) +
+                        cPracticas * (parseFloat(formData.medicoPracticasValor) || 0) +
+                        cEcografias * (parseFloat(formData.medicoEcografiasValor) || 0) +
+                        cCirugias * (parseFloat(formData.medicoCirugiasValor) || 0) +
+                        cGuardias * (parseFloat(formData.medicoGuardiasValor) || 0) +
+                        cInformes * (parseFloat(formData.medicoInformesValor) || 0) +
+                        customList.reduce((acc, it) => acc + ((parseInt(it.cantidad, 10) || 0) * (parseFloat(it.valor) || 0)), 0)
+
+                      return (
+                        <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-xs bg-slate-950 px-3 py-2.5 rounded-lg border border-slate-800">
+                          <span className="text-slate-400">
+                            Total Prestaciones:{' '}
+                            <strong className="text-white font-mono font-bold">
+                              {totalPrestaciones}
+                            </strong>
+                          </span>
+                          <span className="font-mono font-bold text-emerald-400 text-sm">
+                            Total Bruto Calculado: {fmtMoney(totalBruto)}
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
