@@ -61,7 +61,9 @@ import {
   RotateCcw,
   ArrowUpDown,
   Lock,
-  Unlock
+  Unlock,
+  HelpCircle,
+  Copy
 } from 'lucide-react'
 import {
   BarChart,
@@ -1373,6 +1375,34 @@ export default function App() {
   const [chequeFilterFormato, setChequeFilterFormato] = useState('TODOS') // 'TODOS' | 'FISICO' | 'ECHEQ'
   const [chequeFilterEstado, setChequeFilterEstado] = useState('TODOS') // 'TODOS' | 'VENCIDO' | 'HOY' | 'POR_VENCER' | 'PAGADOS' | 'PENDIENTES'
   const [chequeFilterMes, setChequeFilterMes] = useState('TODOS')
+  const [isChequeHelpModalOpen, setIsChequeHelpModalOpen] = useState(false)
+  const [copiedChequeHelp, setCopiedChequeHelp] = useState(false)
+
+  const handleCopyChequeHelpText = () => {
+    const text = `INSTRUCTIVO: GESTIÓN E IMPUTACIÓN DE CHEQUES
+
+1. ¿Cuándo un cheque está "⏳ PENDIENTE"?
+Un cheque figura como Pendiente mientras NO tenga cargada una Fecha de Pago / Cobro. Esto significa que está en cartera o emitido, pero aún no se cobró ni se debitó de la cuenta bancaria.
+
+2. ¿Cómo SACARLO DE PENDIENTE e IMPUTARLO?
+- Paso 1: En la pestaña "Cheques", haz clic sobre la fila del cheque a imputar.
+- Paso 2: Se abrirá la ventana del movimiento. Baja hasta la sección "Estado y Medio de Pago".
+- Paso 3: Haz clic en el botón verde "✓ Pagado Hoy" (o escribe la fecha en "Fecha de Pago").
+- Paso 4: (Opcional) Indica la Referencia / Nº de Transf. / OP correspondiente.
+- Paso 5: Haz clic en "Guardar Cambios". El cheque pasará a estado "✓ Pagado / Cobrado" y saldrá de los pendientes.
+
+3. ¿Cómo VOLVER A DEJARLO EN PENDIENTE?
+- Abre el cheque haciendo clic sobre él, en "Estado y Medio de Pago" presiona el botón "Dejar Pendiente" y haz clic en "Guardar Cambios".
+
+4. CHEQUES ANULADOS, DEVUELTOS O CADUCADOS:
+- Para cambiar a estos estados, escribe en el Detalle u Observaciones del cheque: "ANULADO", "DEVUELTO" o "CADUCADO". El sistema actualizará su estado automáticamente.`
+
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text)
+    }
+    setCopiedChequeHelp(true)
+    setTimeout(() => setCopiedChequeHelp(false), 2000)
+  }
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -5671,6 +5701,34 @@ export default function App() {
           {/* TAB 6: GESTIÓN DE CHEQUES */}
           {activeTab === 'cheques' && (
             <div className="space-y-4 md:space-y-6 animate-in fade-in duration-150">
+              {/* BANNER INFORMATIVO: CÓMO IMPUTAR O SACAR DE PENDIENTE */}
+              <div className="bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900 border border-blue-500/30 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md print:hidden">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                    <HelpCircle className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                      <span>¿Cómo sacar un cheque de "Pendiente" o imputarlo?</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30">
+                        Instructivo
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Haz clic en cualquier cheque de la tabla para abrirlo, dirígete a <strong className="text-slate-200">"Estado y Medio de Pago"</strong> y presiona <strong className="text-emerald-400">"✓ Pagado Hoy"</strong> o ingresa la fecha de cobro/débito.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsChequeHelpModalOpen(true)}
+                  className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span>Ver Guía Completa (?)</span>
+                </button>
+              </div>
+
               {/* HEADER & METRICS CARDS */}
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg flex items-center gap-3">
@@ -5814,6 +5872,17 @@ export default function App() {
                       <Printer className="w-3.5 h-3.5 text-blue-400" />
                       <span>Imprimir</span>
                     </button>
+
+                    {/* Botón Ayuda e Imputación */}
+                    <button
+                      type="button"
+                      onClick={() => setIsChequeHelpModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition cursor-pointer shadow-sm active:scale-95"
+                      title="Ver instructivo: cómo sacar cheques de pendiente e imputarlos"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Ayuda e Imputación (?)</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -5850,7 +5919,17 @@ export default function App() {
                         <th className="py-3 px-4 print:py-1.5 print:px-2">Detalle / Referencia Bancaria</th>
                         <th className="py-3 px-3 print:py-1.5 print:px-2">Emisión</th>
                         <th className="py-3 px-4 print:py-1.5 print:px-2 text-right">Importe</th>
-                        <th className="py-3 px-3 print:py-1.5 print:px-2 text-center print:hidden">Gestión</th>
+                        <th className="py-3 px-3 print:py-1.5 print:px-2 text-center print:hidden">
+                          <button
+                            type="button"
+                            onClick={() => setIsChequeHelpModalOpen(true)}
+                            className="inline-flex items-center gap-1 hover:text-amber-300 transition cursor-pointer uppercase font-semibold"
+                            title="¿Cómo gestionar o imputar? Clic para ver ayuda"
+                          >
+                            <span>Gestión</span>
+                            <HelpCircle className="w-3 h-3 text-amber-400" />
+                          </button>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 print:divide-slate-300 font-medium">
@@ -6030,6 +6109,194 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {/* MODAL DE AYUDA (?): GESTIÓN E IMPUTACIÓN DE CHEQUES */}
+      {isChequeHelpModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-slate-200">
+            {/* MODAL HEADER */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <HelpCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg text-white flex items-center gap-2">
+                    <span>Instructivo: Gestión e Imputación de Cheques</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      Ayuda (?)
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Aprende cómo sacar cheques de pendiente, imputarlos como pagados y gestionar sus estados
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsChequeHelpModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* MODAL BODY */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+              {/* 1. ¿QUÉ SIGNIFICA PENDIENTE? */}
+              <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
+                <h4 className="text-xs sm:text-sm font-bold text-sky-400 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-sky-400" />
+                  <span>1. ¿Cuándo un cheque figura como "⏳ Pendiente"?</span>
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Un cheque está en estado <span className="text-amber-400 font-semibold">"Pendiente"</span> (o <em>Activo en Cartera / Por Vencer / Vencido</em>) mientras <strong>no posea una Fecha de Pago / Cobro</strong> cargada. Esto indica que el cheque está emitido o recibido, pero su monto todavía no fue cobrado ni debitado formalmente en el banco.
+                </p>
+              </div>
+
+              {/* 2. PASO A PASO: CÓMO SACARLO DE PENDIENTE E IMPUTARLO */}
+              <div className="space-y-2">
+                <h4 className="text-xs sm:text-sm font-bold text-emerald-400 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>2. Paso a Paso: Cómo Sacarlo de Pendiente e Imputarlo</span>
+                </h4>
+                <div className="space-y-2">
+                  {[
+                    {
+                      num: 'Paso 1',
+                      title: 'Haz clic en el cheque',
+                      desc: 'En la tabla de cheques, haz clic sobre la fila del cheque que deseas imputar. Se abrirá la ventana con todos sus datos.'
+                    },
+                    {
+                      num: 'Paso 2',
+                      title: 'Baja a "Estado y Medio de Pago"',
+                      desc: 'Desplázate hacia abajo en el formulario hasta encontrar el recuadro "Estado y Medio de Pago".'
+                    },
+                    {
+                      num: 'Paso 3',
+                      title: 'Asigna la Fecha de Pago / Cobro',
+                      desc: 'Haz clic en el botón verde "✓ Pagado Hoy" si se acreditó o debitó en el día, o escribe manualmente la fecha correspondiente en el campo "Fecha de Pago".'
+                    },
+                    {
+                      num: 'Paso 4',
+                      title: 'Referencia / OP (Opcional)',
+                      desc: 'Puedes indicar en el campo de referencia el Nº de transferencia, Orden de Pago o débito bancario asociado.'
+                    },
+                    {
+                      num: 'Paso 5',
+                      title: 'Guardar Cambios',
+                      desc: 'Presiona el botón "Guardar Cambios". Al guardar, el cheque pasará inmediatamente a "✓ Pagado / Cobrado" y saldrá de los pendientes y de las alertas de vencimiento.'
+                    }
+                  ].map((s, idx) => (
+                    <div key={idx} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                      <span className="px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black shrink-0 mt-0.5">
+                        {s.num}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-white">{s.title}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{s.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. ¿CÓMO VOLVER A DEJARLO PENDIENTE? */}
+              <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
+                <h4 className="text-xs sm:text-sm font-bold text-amber-400 flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-amber-400" />
+                  <span>3. ¿Cómo volver a dejarlo en "⏳ Pendiente" si te equivocaste?</span>
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Abre nuevamente el cheque haciendo clic sobre él, baja a <strong className="text-white">"Estado y Medio de Pago"</strong> y presiona el botón <span className="text-amber-400 font-bold border border-amber-500/30 px-1.5 py-0.5 rounded bg-amber-500/10">Dejar Pendiente</span>. Esto borrará la fecha de pago. Luego presiona <strong>"Guardar Cambios"</strong> y volverá a figurar como pendiente.
+                </p>
+              </div>
+
+              {/* 4. OTROS ESTADOS: ANULADOS, DEVUELTOS Y CADUCADOS */}
+              <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
+                <h4 className="text-xs sm:text-sm font-bold text-purple-400 flex items-center gap-2">
+                  <Ban className="w-4 h-4 text-purple-400" />
+                  <span>4. Estados Especiales: Anulados, Devueltos y Caducados</span>
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Para registrar estos casos sin eliminar el comprobante:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <div className="p-2 rounded-lg bg-red-950/30 border border-red-500/30">
+                    <span className="font-bold text-red-400 block mb-1">⊘ Anulado</span>
+                    <span className="text-[11px] text-slate-400">Escribe <code className="text-red-300 bg-red-950/60 px-1 rounded">ANULADO</code> en el Detalle u Observaciones.</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-purple-950/30 border border-purple-500/30">
+                    <span className="font-bold text-purple-400 block mb-1">↩ Devuelto</span>
+                    <span className="text-[11px] text-slate-400">Escribe <code className="text-purple-300 bg-purple-950/60 px-1 rounded">DEVUELTO</code> en el Detalle u Observaciones.</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-orange-950/30 border border-orange-500/30">
+                    <span className="font-bold text-orange-400 block mb-1">⌛ Caducado</span>
+                    <span className="text-[11px] text-slate-400">Escribe <code className="text-orange-300 bg-orange-950/60 px-1 rounded">CADUCADO</code> en el Detalle u Observaciones.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. TEXTO RÁPIDO COPIABLE */}
+              <div className="p-4 bg-slate-950 border border-amber-500/30 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    📋 Resumen para Copiar y Enviar
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyChequeHelpText}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 transition cursor-pointer"
+                  >
+                    {copiedChequeHelp ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400 font-bold">¡Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar Texto</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <pre className="text-[11px] font-mono text-slate-300 bg-slate-900/90 p-3 rounded-lg border border-slate-800 whitespace-pre-wrap leading-relaxed select-all">
+{`INSTRUCTIVO: GESTIÓN E IMPUTACIÓN DE CHEQUES
+
+1. ¿Cuándo un cheque está "⏳ PENDIENTE"?
+Un cheque figura como Pendiente mientras NO tenga cargada una Fecha de Pago / Cobro.
+
+2. ¿Cómo SACARLO DE PENDIENTE e IMPUTARLO?
+- Paso 1: En la pestaña "Cheques", haz clic sobre la fila del cheque a imputar.
+- Paso 2: Se abrirá la ventana del movimiento. Baja hasta "Estado y Medio de Pago".
+- Paso 3: Haz clic en "✓ Pagado Hoy" (o escribe la fecha en "Fecha de Pago").
+- Paso 4: (Opcional) Indica la Referencia / Nº de Transf. / OP.
+- Paso 5: Haz clic en "Guardar Cambios". El cheque pasará a "✓ Pagado / Cobrado".
+
+3. ¿Cómo VOLVER A DEJARLO EN PENDIENTE?
+- Abre el cheque haciendo clic sobre él, presiona "Dejar Pendiente" y guarda los cambios.`}
+                </pre>
+              </div>
+            </div>
+
+            {/* MODAL FOOTER */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-slate-400">
+                Puedes consultar esta guía en cualquier momento desde el botón (?)
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsChequeHelpModalOpen(false)}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg transition cursor-pointer"
+              >
+                Entendido / Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL EMISIÓN DE ORDEN DE PAGO (OP) FORMAL */}
       <OrdenesPagoModal
