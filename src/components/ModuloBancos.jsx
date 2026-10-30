@@ -26,7 +26,9 @@ import {
   Download,
   AlertTriangle,
   FileCheck,
-  FolderOpen
+  FolderOpen,
+  HelpCircle,
+  Copy
 } from 'lucide-react'
 import {
   parsePdfExtractoBanco,
@@ -73,6 +75,29 @@ export default function ModuloBancos({
   // Estado de Modal de Reclasificación de movimientos no categorizados
   const [isReclassifyModalOpen, setIsReclassifyModalOpen] = useState(false)
   const [reclassifyPdfTab, setReclassifyPdfTab] = useState('cobros') // 'cobros' | 'pagos'
+
+  // Estado de Modal de Ayuda (?) Paso a paso para el cliente
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false)
+  const [copiedHelp, setCopiedHelp] = useState(false)
+
+  const handleCopyHelpText = () => {
+    const text = `Banco y conciliación
+Generador de extracto
+Subo los 2 PDF "Cobros y Pagos"
+Autocompletar EXCEL
+Seleccionar el último extracto (en este caso seria septiembre) dar click
+Genera archivo nuevo que va a estar en descargas
+Copiar y Guardar en la carpeta y va a decir en este caso el mes que se proceso "Octubre"
+Guardar como
+Examinar
+Reemplazar Archivo - Click
+Ok`
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text)
+    }
+    setCopiedHelp(true)
+    setTimeout(() => setCopiedHelp(false), 2000)
+  }
 
   // Función para re-categorizar una transacción y recalcular inmediatamente los totales
   const handleReclassifyTransaction = (targetTab, txId, newCategory, applyToAllMatching = false) => {
@@ -563,21 +588,31 @@ export default function ModuloBancos({
             <span>Libro Bancos & Conciliación</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('analisisPdf')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer relative ${
-              activeSubTab === 'analisisPdf'
-                ? 'bg-sky-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>Generador Extractos PDF</span>
-            {hasAtLeastOnePdf && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            )}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('analisisPdf')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer relative ${
+                activeSubTab === 'analisisPdf'
+                  ? 'bg-sky-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Generador Extractos PDF</span>
+              {hasAtLeastOnePdf && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsHelpModalOpen(true)}
+              className="p-1.5 rounded-lg text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition cursor-pointer flex items-center justify-center"
+              title="Instructivo / Ayuda (?): Paso a paso para procesar extractos"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -588,14 +623,35 @@ export default function ModuloBancos({
         <div className="space-y-4 animate-in fade-in duration-150">
           {/* DUAL UPLOAD BOX: COBROS (2324) Y PAGOS (5145) */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-lg space-y-5">
-            <div className="text-center max-w-xl mx-auto">
-              <h3 className="text-base font-bold text-white flex items-center justify-center gap-2">
-                <UploadCloud className="w-5 h-5 text-sky-400" />
-                <span>Cargar Extractos Bancarios (Cobros y Pagos)</span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
+            <div className="text-center max-w-xl mx-auto space-y-2">
+              <div className="flex items-center justify-center gap-2">
+                <h3 className="text-base font-bold text-white flex items-center justify-center gap-2">
+                  <UploadCloud className="w-5 h-5 text-sky-400" />
+                  <span>Cargar Extractos Bancarios (Cobros y Pagos)</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsHelpModalOpen(true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30 transition cursor-pointer shadow-sm active:scale-95"
+                  title="Ver instructivo paso a paso para el cliente"
+                >
+                  <HelpCircle className="w-4 h-4 text-amber-400" />
+                  <span>Ayuda (?)</span>
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">
                 Sube ambos PDFs del mes. Luego con el botón de abajo seleccionas el Excel y se autocompletarán ambas cuentas en una sola descarga.
               </p>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setIsHelpModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 font-semibold underline underline-offset-4 cursor-pointer"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span>¿Cómo procesar los extractos? Ver guía paso a paso (?)</span>
+                </button>
+              </div>
             </div>
 
             {/* DOS TARJETAS DE CARGA: COBROS Y PAGOS */}
@@ -790,9 +846,19 @@ export default function ModuloBancos({
                   </label>
                 )
               ) : (
-                <p className="text-xs text-slate-500 italic">
-                  Sube al menos un extracto PDF arriba para habilitar el autocompletado del Excel.
-                </p>
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-xs text-slate-500 italic">
+                    Sube al menos un extracto PDF arriba para habilitar el autocompletado del Excel.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsHelpModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 font-semibold cursor-pointer underline underline-offset-4"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>Ver instructivo paso a paso (?)</span>
+                  </button>
+                </div>
               )}
 
               {currentPdfAnalisis && (
@@ -1944,6 +2010,191 @@ export default function ModuloBancos({
                 className="px-5 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-lg transition cursor-pointer"
               >
                 Listo / Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE AYUDA (?): GUÍA PASO A PASO PARA EL CLIENTE */}
+      {isHelpModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* MODAL HEADER */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <HelpCircle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg text-white flex items-center gap-2">
+                    <span>Instructivo Paso a Paso</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      Ayuda (?)
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Procedimiento guiado para procesar extractos bancarios y autocompletar el Excel
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHelpModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                title="Cerrar ventana"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* MODAL BODY */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+              {/* PASOS NUMERADOS VISUALES */}
+              <div className="space-y-2">
+                {[
+                  {
+                    num: '1',
+                    title: 'Banco y conciliación',
+                    desc: 'Ingresar a la sección "Bancos y conciliación" en el sistema.',
+                    badge: 'Módulo'
+                  },
+                  {
+                    num: '2',
+                    title: 'Generador de extracto',
+                    desc: 'Acceder a la pestaña "Generador Extractos PDF".',
+                    badge: 'Pestaña'
+                  },
+                  {
+                    num: '3',
+                    title: 'Subo los 2 PDF "Cobros y Pagos"',
+                    desc: 'Cargar los 2 archivos PDF oficiales del mes: cuenta de Cobros (2324) y cuenta de Pagos (5145).',
+                    badge: 'Carga'
+                  },
+                  {
+                    num: '4',
+                    title: 'Autocompletar EXCEL',
+                    desc: 'Hacer clic en el botón de autocompletado en Excel.',
+                    badge: 'Acción'
+                  },
+                  {
+                    num: '5',
+                    title: 'Seleccionar el último extracto (en este caso seria septiembre) dar click',
+                    desc: 'En la ventana del explorador de archivos, seleccionar el archivo Excel con el último extracto procesado y dar clic.',
+                    badge: 'Selección'
+                  },
+                  {
+                    num: '6',
+                    title: 'Genera archivo nuevo que va a estar en descargas',
+                    desc: 'El sistema procesa automáticamente los extractos, crea la nueva hoja mensual sin tocar las anteriores y descarga el nuevo archivo.',
+                    badge: 'Descarga'
+                  },
+                  {
+                    num: '7',
+                    title: 'Copiar y Guardar en la carpeta y va a decir en este caso el mes que se proceso "Octubre"',
+                    desc: 'Copiar el archivo descargado y guardarlo en la carpeta habitual; indicará el nuevo mes procesado.',
+                    badge: 'Carpeta'
+                  },
+                  {
+                    num: '8',
+                    title: 'Guardar como',
+                    desc: 'Abrir el archivo y seleccionar Guardar como.',
+                    badge: 'Excel'
+                  },
+                  {
+                    num: '9',
+                    title: 'Examinar',
+                    desc: 'Dar clic en Examinar para ubicar la carpeta de destino.',
+                    badge: 'Excel'
+                  },
+                  {
+                    num: '10',
+                    title: 'Reemplazar Archivo - Click',
+                    desc: 'Seleccionar el archivo de trabajo para actualizarlo y confirmar el reemplazo.',
+                    badge: 'Excel'
+                  },
+                  {
+                    num: '11',
+                    title: 'Ok',
+                    desc: 'Hacer clic en Ok para finalizar el procedimiento.',
+                    badge: 'Finalizar'
+                  }
+                ].map((step, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-3 p-2.5 sm:p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition"
+                  >
+                    <span className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-sky-600/20 text-sky-400 border border-sky-500/30 font-black text-xs flex items-center justify-center shrink-0 mt-0.5">
+                      {step.num}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs sm:text-sm font-bold text-white">
+                          {step.title}
+                        </p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-medium shrink-0">
+                          {step.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {step.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* TEXTO EXACTO COPIABLE PARA ENVIAR AL CLIENTE */}
+              <div className="p-4 bg-slate-950 border border-amber-500/30 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    📋 Texto Rápido para Enviar al Cliente
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyHelpText}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 transition cursor-pointer"
+                  >
+                    {copiedHelp ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400 font-bold">¡Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar Texto</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <pre className="text-[11px] sm:text-xs font-mono text-slate-300 bg-slate-900/90 p-3.5 rounded-lg border border-slate-800 whitespace-pre-wrap leading-relaxed select-all">
+{`Banco y conciliación
+Generador de extracto
+Subo los 2 PDF "Cobros y Pagos"
+Autocompletar EXCEL
+Seleccionar el último extracto (en este caso seria septiembre) dar click
+Genera archivo nuevo que va a estar en descargas
+Copiar y Guardar en la carpeta y va a decir en este caso el mes que se proceso "Octubre"
+Guardar como
+Examinar
+Reemplazar Archivo - Click
+Ok`}
+                </pre>
+              </div>
+            </div>
+
+            {/* MODAL FOOTER */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between gap-3 shrink-0">
+              <span className="text-xs text-slate-400">
+                Puedes consultar esta guía en cualquier momento haciendo clic en (?)
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsHelpModalOpen(false)}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-lg transition cursor-pointer"
+              >
+                Entendido / Cerrar
               </button>
             </div>
           </div>
