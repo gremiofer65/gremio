@@ -237,9 +237,13 @@ export default function CajaDiaria({
 
   // Estado de sincronización en tiempo real con Supabase
   const [syncStatus, setSyncStatus] = useState('idle') // 'idle' | 'syncing' | 'saved' | 'error'
+  const [lastSyncTime, setLastSyncTime] = useState(() =>
+    new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  )
   const saveTimeoutsRef = useRef({})
   const syncPendingRef = useRef(new Map())
   const isRemoteUpdateRef = useRef(false)
+  const broadcastChannelRef = useRef(null)
 
   // Guardar una jornada específica en Supabase (particionado en chunks en tabla 'maestros' para sincronización multi-usuario)
   const saveDayToSupabase = useCallback(
@@ -274,6 +278,17 @@ export default function CajaDiaria({
           setSyncStatus('error')
         } else {
           setSyncStatus('saved')
+          setLastSyncTime(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+          // Emitir broadcast en tiempo real a otras PCs conectadas
+          try {
+            broadcastChannelRef.current?.send({
+              type: 'broadcast',
+              event: 'caja_updated',
+              payload: { date, timestamp: Date.now() }
+            })
+          } catch (bErr) {
+            console.warn('Broadcast send warning:', bErr)
+          }
           setTimeout(() => setSyncStatus('idle'), 2500)
         }
       } catch (err) {
@@ -389,30 +404,45 @@ export default function CajaDiaria({
         } catch (e) {}
         return next
       })
+      setLastSyncTime(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
     } catch (err) {
       console.error('Error en loadCajasFromSupabase:', err)
     }
   }, [supabase, saveDayToSupabase])
 
-  // Escuchar cambios en tiempo real desde Supabase (Realtime)
+  // Escuchar cambios en tiempo real desde Supabase (Broadcast + Polling + Focus)
   useEffect(() => {
     loadCajasFromSupabase()
 
     if (!supabase) return
 
-    const channel = supabase
-      .channel('realtime:caja_diaria_sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'maestros', filter: 'categoria=eq.__CAJA_DATA__' },
-        () => {
-          loadCajasFromSupabase()
-        }
-      )
-      .subscribe()
+    // 1. Canal Realtime Broadcast (comunicación instantánea WebSocket directa entre navegadores)
+    const channel = supabase.channel('caja_diaria_broadcast', {
+      config: { broadcast: { self: false } }
+    })
+
+    channel.on('broadcast', { event: 'caja_updated' }, () => {
+      loadCajasFromSupabase()
+    })
+
+    channel.subscribe()
+    broadcastChannelRef.current = channel
+
+    // 2. Polling periódico de respaldo cada 4 segundos
+    const interval = setInterval(() => {
+      loadCajasFromSupabase()
+    }, 4000)
+
+    // 3. Sincronización inmediata al volver a la pestaña/ventana del navegador
+    const onFocus = () => loadCajasFromSupabase()
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
 
     return () => {
-      supabase.removeChannel(channel)
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+      if (channel) supabase.removeChannel(channel)
     }
   }, [supabase, loadCajasFromSupabase])
 
@@ -560,25 +590,21 @@ export default function CajaDiaria({
 
   // Actualizar un campo de la jornada actual
   const updateCurrentCaja = (field, value) => {
+    let updatedRecord = null
     setCajasData((prev) => {
-      const existing = prev[selectedDate] || {
-        saldoInicial: 0,
-        responsable: currentUser?.nombre || 'Secretaría',
-        observaciones: '',
-        recuentoManual: null,
-        desgloseBilletes: {},
-        movimientos: []
-      }
-      const updated = {
+      const existing = prev[selectedDate] || currentCaja
+      updatedRecord = {
         ...existing,
         [field]: value
       }
-      scheduleSaveToSupabase(selectedDate, updated)
       return {
         ...prev,
-        [selectedDate]: updated
+        [selectedDate]: updatedRecord
       }
     })
+    if (updatedRecord) {
+      scheduleSaveToSupabase(selectedDate, updatedRecord)
+    }
   }
 
   // Navegación de días
@@ -1187,11 +1213,11 @@ export default function CajaDiaria({
               loadCajasFromSupabase()
               showToast('Caja diaria sincronizada desde la nube.')
             }}
-            title="Recargar y sincronizar con la nube ahora"
+            title={`Recargar y sincronizar con la nube ahora (Última: ${lastSyncTime})`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin text-amber-400' : ''}`} />
-            <span>Sincronizar</span>
+            <span>Sincronizar {lastSyncTime && <span className="opacity-60 text-[10px]">({lastSyncTime})</span>}</span>
           </button>
 
           {/* Botón Depositar Cheque de Cartera */}
@@ -1260,7 +1286,7 @@ export default function CajaDiaria({
               <Wallet className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline justify-between">
+          <div className="mt-2 flex items-center gap-1.5">
             <input
               type="number"
               value={currentCaja.saldoInicial ?? ''}
@@ -1269,6 +1295,17 @@ export default function CajaDiaria({
               placeholder="0.00"
               className="text-lg md:text-xl font-black text-white bg-slate-950/60 border border-slate-700/60 rounded-lg px-2 py-0.5 w-full focus:outline-none focus:border-amber-500 transition"
             />
+            <button
+              type="button"
+              onClick={() => {
+                flushSaveToSupabase(selectedDate)
+                showToast(`✅ Saldo Inicial (${fmtMoney(currentCaja.saldoInicial)}) guardado y sincronizado en la nube.`)
+              }}
+              title="Guardar saldo inicial en la nube ahora para que lo vean todas las PCs"
+              className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold cursor-pointer transition whitespace-nowrap shadow-sm"
+            >
+              Guardar
+            </button>
           </div>
           <div className="flex items-center justify-between mt-1">
             <p className="text-[10px] text-slate-500">Apertura en efectivo físico</p>
